@@ -1,8 +1,7 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from config.app_config import app_config
 
 import structlog
+from fastapi import FastAPI
 
 logger = structlog.get_logger("lifespan")
 
@@ -10,7 +9,7 @@ logger = structlog.get_logger("lifespan")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
-    logger.info(f"application_starting")
+    logger.info("application_starting")
 
     yield
 

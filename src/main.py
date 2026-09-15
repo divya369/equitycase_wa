@@ -1,9 +1,9 @@
 from fastapi import FastAPI
+
 from config.app_config import app_config
 from config.lifespan import lifespan
 from config.logging import configure_logging
 from errors.handlers import register_error_handlers
-
 
 configure_logging()
 

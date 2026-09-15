@@ -22,6 +22,9 @@ fastapi-templete = "fastapi_templete:main"
 requires = ["uv_build>=0.12.7,<0.13.0"]
 build-backend = "uv_build"
 
+[tool.uv]
+package = false
+
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
@@ -31,3 +34,36 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "ruff>=0.16.7",
 ]
+
+
+#------
+# Ruff 
+#------
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "T20",
+]
+
+ignore = [
+    "E501",
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"fastapi.HTTPException" = { msg = "Do not use HTTPException. Use an application error from src.errors instead." }
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

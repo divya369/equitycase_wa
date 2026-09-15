@@ -1,6 +1,6 @@
-from pydantic_settings import BaseSettings,SettingsConfigDict
-from pydantic import Field
 import structlog
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = structlog.get_logger("app_config")
 
@@ -21,6 +21,6 @@ def load_app_config() -> AppConfig:
         return AppConfig()
     except Exception as e:
         logger.error(f"Failed to load app config: {e}")
-        raise RuntimeError("Failed to load app config")
+        raise RuntimeError("Failed to load app config") from e
 
 app_config = load_app_config()
