@@ -1,10 +1,13 @@
 from fastapi import FastAPI
 
+from config.app_config import app_config
 
 
-app = FastAPI()
+app = FastAPI(
+    title=app_config.app_name,
+)
 
 
-@app.get("/helthz")
-def helthz():
-    return {"status":"helthy"}
+@app.get("/healthz")
+def healthz():
+    return {"status":"healthy"}
