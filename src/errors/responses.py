@@ -5,16 +5,16 @@ def error_response(
     *,
     code: str,
     message: str,
+    request_id: str,
     details: Any | None = None,
 ) -> dict:
-    response = {
-        "errors": {
-            "code": code,
-            "message": message,
-        }
+    error = {
+        "code": code,
+        "message": message,
+        "request_id": request_id,
     }
 
     if details is not None:
-        response["errors"]["details"] = details
+        error["details"] = details
 
-    return response
+    return {"errors": error}
