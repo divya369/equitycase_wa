@@ -13,3 +13,16 @@ dev:
 
 start:
 	uv run uvicorn src.main:app --host $(APP_HOST) --port $(APP_PORT) 
+
+lint:
+	uv run ruff check .
+
+format:
+	uv run ruff format .
+
+check:
+	uv run ruff check .
+	uv run ruff format --check .
+
+test:
+	uv run pytest

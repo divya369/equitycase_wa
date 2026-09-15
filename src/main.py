@@ -8,11 +8,7 @@ from errors.handlers import register_error_handlers
 configure_logging()
 
 
-
-app = FastAPI(
-    title=app_config.app_name,
-    lifespan=lifespan
-)
+app = FastAPI(title=app_config.app_name, lifespan=lifespan)
 
 register_error_handlers(app)
 
@@ -20,4 +16,4 @@ register_error_handlers(app)
 @app.get("/healthz")
 def healthz():
 
-    return {"status":"healthy"}
+    return {"status": "healthy"}
