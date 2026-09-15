@@ -1,5 +1,8 @@
 from pydantic_settings import BaseSettings,SettingsConfigDict
 from pydantic import Field
+import structlog
+
+logger = structlog.get_logger("app_config")
 
 model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -17,7 +20,7 @@ def load_app_config() -> AppConfig:
     try:
         return AppConfig()
     except Exception as e:
-        print(f"Error loading app config: {e}")
+        logger.error(f"Failed to load app config: {e}")
         raise RuntimeError("Failed to load app config")
 
 app_config = load_app_config()
