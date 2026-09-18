@@ -2,8 +2,15 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from core.phone import PhoneStr
 from modules.contacts.models import Contact
 from modules.operator.models import Operator
+from modules.operator.schemas import NameStr
+
+
+class CreateContactIn(BaseModel):
+    name: NameStr
+    phone: PhoneStr
 
 
 class UserOut(BaseModel):

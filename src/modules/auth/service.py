@@ -1,10 +1,10 @@
-import re
 from datetime import timedelta
 
 import structlog
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from config.app_config import app_config
+from core.phone import to_wa_id
 from core.security import (
     constant_time_equals,
     create_access_token,
@@ -25,10 +25,6 @@ OTP_TTL = timedelta(minutes=5)
 OTP_MAX_ATTEMPTS = 5
 
 
-def _digits(value: str) -> str:
-    return re.sub(r"\D", "", value)
-
-
 class AuthService:
     def __init__(
         self,
@@ -45,7 +41,7 @@ class AuthService:
 
     async def _operator_for_phone(self, phone: str) -> Operator | None:
         operator = await self.operators.get()
-        if operator is None or _digits(phone) != operator.wa_id:
+        if operator is None or to_wa_id(phone) != operator.wa_id:
             return None
         return operator
 

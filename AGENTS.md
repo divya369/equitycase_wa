@@ -179,7 +179,9 @@ The payload inside `data` must match exactly:
 - One shared `httpx.AsyncClient` (created in lifespan), 10s timeout. Retry
   429/5xx with exponential backoff (3 attempts). Never retry 4xx.
 - Customers message first; a new contact is a DB row only. Identity is
-  `wa_id` = E.164 digits without `+`.
+  `wa_id` = E.164 digits without `+`. Phone input uses `core.phone.PhoneStr`;
+  convert with `to_wa_id()` / `to_display_phone()` — never re-implement
+  digit stripping.
 - **Webhook POST order**: `await request.body()` raw bytes (no Pydantic body
   param) -> `hmac.compare_digest` on `X-Hub-Signature-256` with
   `META_APP_SECRET` (403 on mismatch) -> insert `webhook_events`

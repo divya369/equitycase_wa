@@ -2,13 +2,9 @@ from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints
 
+from core.phone import PhoneStr
 from modules.contacts.schemas import UserOut
 
-# Lenient on formatting (+, spaces, dashes); the service compares digits only
-PhoneStr = Annotated[
-    str,
-    StringConstraints(strip_whitespace=True, pattern=r"^\+?[\d\s\-()]{8,20}$"),
-]
 OtpCodeStr = Annotated[
     str,
     StringConstraints(strip_whitespace=True, pattern=r"^\d{4,8}$"),

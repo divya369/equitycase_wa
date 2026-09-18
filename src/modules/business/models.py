@@ -2,6 +2,7 @@ from sqlalchemy import CheckConstraint, Column, SmallInteger, text
 from sqlmodel import Field, SQLModel
 
 from core.columns import text_column
+from core.phone import to_wa_id
 
 
 class BusinessNumber(SQLModel, table=True):
@@ -28,4 +29,4 @@ class BusinessNumber(SQLModel, table=True):
     @property
     def wa_id(self) -> str:
         """Digits-only form, used as sender_wa_id on outbound messages."""
-        return "".join(ch for ch in self.display_phone if ch.isdigit())
+        return to_wa_id(self.display_phone)

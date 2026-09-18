@@ -4,7 +4,6 @@ Idempotent — run it any number of times:  make seed
 """
 
 import asyncio
-import re
 import sys
 
 import structlog
@@ -14,14 +13,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from config.database_config import DatabaseConfig
 from config.logging import configure_logging
 from config.seed_config import SeedConfig
+from core.phone import to_wa_id
 from modules.business.repository import BusinessRepository
 from modules.operator.repository import OperatorRepository
 
 logger = structlog.get_logger("seed")
-
-
-def digits(value: str) -> str:
-    return re.sub(r"\D", "", value)
 
 
 async def seed(cfg: SeedConfig, database_url: str) -> None:
@@ -36,7 +32,7 @@ async def seed(cfg: SeedConfig, database_url: str) -> None:
             )
             await OperatorRepository(session).upsert(
                 phone=cfg.owner_phone,
-                wa_id=digits(cfg.owner_phone),
+                wa_id=to_wa_id(cfg.owner_phone),
                 name=cfg.owner_name,
             )
             await session.commit()
@@ -54,7 +50,7 @@ def main() -> int:
         logger.error("seed_config_invalid", error=str(e))
         return 1
 
-    if digits(cfg.owner_phone) == digits(cfg.business_display_phone):
+    if to_wa_id(cfg.owner_phone) == to_wa_id(cfg.business_display_phone):
         if cfg.otp_channel == "whatsapp":
             # NUMBER LOCK-IN: a Cloud API number can't use the WhatsApp app,
             # so it can never receive its own OTP over WhatsApp.
@@ -74,7 +70,7 @@ def main() -> int:
     logger.info(
         "seed_complete",
         business_phone_number_id=cfg.business_phone_number_id,
-        operator_wa_id=digits(cfg.owner_phone),
+        operator_wa_id=to_wa_id(cfg.owner_phone),
     )
     return 0
 
