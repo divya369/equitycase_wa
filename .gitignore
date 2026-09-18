@@ -13,4 +13,7 @@ wheels/
 .env.*
 !.env.example
 
+# Service-account keys and other credentials
+secrets/
+
 .ruff_cache
