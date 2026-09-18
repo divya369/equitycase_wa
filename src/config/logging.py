@@ -1,7 +1,24 @@
 import logging
+import re
 import sys
 
 import structlog
+
+_TOKEN_QUERY = re.compile(r"(token=)[^&\s\"']+", re.IGNORECASE)
+
+
+class RedactTokenQueryFilter(logging.Filter):
+    """Strip ?token=<jwt> from log lines (uvicorn access + websocket logs)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                _TOKEN_QUERY.sub(r"\1***", a) if isinstance(a, str) else a
+                for a in record.args
+            )
+        if isinstance(record.msg, str):
+            record.msg = _TOKEN_QUERY.sub(r"\1***", record.msg)
+        return True
 
 
 def configure_logging() -> None:
@@ -12,7 +29,8 @@ def configure_logging() -> None:
             structlog.contextvars.merge_contextvars,
             structlog.stdlib.add_log_level,
             timestamper,
-            structlog.processors.JSONRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
@@ -20,7 +38,10 @@ def configure_logging() -> None:
     )
 
     formatter = structlog.stdlib.ProcessorFormatter(
-        processor=structlog.processors.JSONRenderer(),
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            structlog.processors.JSONRenderer(),
+        ],
         foreign_pre_chain=[
             structlog.stdlib.add_log_level,
             timestamper,
@@ -29,6 +50,7 @@ def configure_logging() -> None:
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(formatter)
+    handler.addFilter(RedactTokenQueryFilter())
 
     root_logger = logging.getLogger()
     root_logger.handlers.clear()

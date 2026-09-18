@@ -5,3 +5,7 @@ class ErrorCode:
     FORBIDDEN = "forbidden"
     CONFLICT = "conflict"
     INTERNAL_ERROR = "internal_error"
+    INVALID_OTP = "invalid_otp"
+    RATE_LIMITED = "rate_limited"
+    CONVERSATION_WINDOW_CLOSED = "conversation_window_closed"
+    BAD_GATEWAY = "bad_gateway"

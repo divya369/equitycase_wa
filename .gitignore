@@ -11,5 +11,6 @@ wheels/
 
 .env
 .env.*
+!.env.example
 
 .ruff_cache

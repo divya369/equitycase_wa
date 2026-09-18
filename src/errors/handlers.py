@@ -4,9 +4,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .codes import ErrorCode
-from .exceptions import AppError
-from .responses import error_response
+from errors.codes import ErrorCode
+from errors.exceptions import AppError
+from errors.responses import error_response
 
 logger = structlog.get_logger()
 
@@ -47,7 +47,7 @@ async def http_error_handler(
     return JSONResponse(
         status_code=exc.status_code,
         content=error_response(
-            code=f"HTTP_{exc.status_code}",
+            code=f"http_{exc.status_code}",
             message=str(exc.detail),
             request_id=get_request_id(request),
         ),

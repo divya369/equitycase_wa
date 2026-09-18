@@ -8,11 +8,20 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.20.0",
+    "argon2-cffi>=25.1.0",
+    "asyncpg>=0.31.0",
+    "boto3>=1.43.97",
     "fastapi>=0.141.1",
+    "firebase-admin>=7.6.0",
+    "httpx>=0.28.1",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
+    "pyjwt>=2.14.0",
+    "slowapi>=0.1.10",
+    "sqlmodel>=0.0.42",
     "structlog>=26.1.0",
-    "uvicorn>=0.53.0",
+    "uvicorn[standard]>=0.53.0",
 ]
 
 [project.scripts]
@@ -37,12 +46,23 @@ dev = [
 
 
 #------
-# Ruff 
+# Pytest
+#------
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+
+#------
+# Ruff
 #------
 
 [tool.ruff]
 line-length = 88
 target-version = "py314"
+src = ["src"]
 
 [tool.ruff.lint]
 select = [
@@ -62,7 +82,7 @@ ignore = [
 ban-relative-imports = "all"
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-"fastapi.HTTPException" = { msg = "Do not use HTTPException. Use an application error from src.errors instead." }
+"fastapi.HTTPException" = { msg = "Do not use HTTPException. Use an application error from errors.exceptions instead." }
 
 [tool.ruff.format]
 quote-style = "double"
