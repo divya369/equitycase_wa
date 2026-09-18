@@ -17,3 +17,5 @@ wheels/
 secrets/
 
 .ruff_cache
+
+.pytest_cache/
