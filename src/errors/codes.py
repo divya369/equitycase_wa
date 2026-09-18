@@ -9,3 +9,4 @@ class ErrorCode:
     RATE_LIMITED = "rate_limited"
     CONVERSATION_WINDOW_CLOSED = "conversation_window_closed"
     BAD_GATEWAY = "bad_gateway"
+    SERVICE_UNAVAILABLE = "service_unavailable"

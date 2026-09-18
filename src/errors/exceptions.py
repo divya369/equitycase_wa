@@ -94,6 +94,15 @@ class RateLimitedError(AppError):
         )
 
 
+class ServiceUnavailableError(AppError):
+    def __init__(self, message: str = "Service unavailable"):
+        super().__init__(
+            code=ErrorCode.SERVICE_UNAVAILABLE,
+            message=message,
+            status_code=503,
+        )
+
+
 class UpstreamError(AppError):
     def __init__(
         self,

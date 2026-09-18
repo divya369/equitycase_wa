@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -6,6 +8,8 @@ from config.base import model_config
 
 class SeedConfig(BaseSettings):
     """Read only by `python -m scripts.seed`."""
+
+    otp_channel: Literal["sms", "whatsapp"] = "sms"
 
     business_phone_number_id: str = Field(min_length=1)
     # Only needed for template management (P11); sending uses phone_number_id
