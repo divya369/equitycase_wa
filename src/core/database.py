@@ -1,5 +1,7 @@
 from collections.abc import AsyncIterator
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -23,6 +25,9 @@ async def get_session() -> AsyncIterator[AsyncSession]:
     """Request-scoped session. Background tasks must open their own via SessionFactory."""
     async with SessionFactory() as session:
         yield session
+
+
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 async def ping_database() -> None:

@@ -53,6 +53,13 @@ dev = [
 pythonpath = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# One event loop for the whole run: the app's async engine is module-global
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+filterwarnings = [
+    # third-party: slowapi still calls asyncio.iscoroutinefunction
+    "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning:slowapi",
+]
 
 
 #------

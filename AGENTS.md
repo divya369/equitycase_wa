@@ -65,8 +65,17 @@ modules/<feature>/
   raises HTTP-level errors.
 - A service may use another module's repository or service; never import
   another module's router.
+- **Transactions: services own them.** Repositories only `flush()`; the
+  service calls `session.commit()` / `rollback()` once per use case.
+- `dependencies.py` builds the service with its repositories and exposes an
+  `Annotated` alias (`AuthServiceDep`, `OperatorServiceDep`). Use
+  `SessionDep` from `core.database`, never a raw `Depends(get_session)`.
+- The logged-in operator: `operator: CurrentOperator` (from
+  `modules.auth.dependencies`).
 - New table -> add its import to `src/db/models.py`, then `make migration`.
-- New router -> register it in `src/routes.py` (under `v1_router` if /v1).
+- New router -> register it in `src/routes.py`: public auth routes on
+  `v1_router`, **everything else on `protected_router`** (JWT enforced there,
+  once, for all routes — don't add per-route auth).
 
 ## Imports
 
@@ -208,6 +217,18 @@ The payload inside `data` must match exactly:
 - New env var -> add it to the right config class **and** `.env.example`.
 - `.env`: comments on their own line, never after a value.
 - Secrets never go in the DB, code, or git (`secrets/` and `.env` are ignored).
+
+## Tests
+
+- `make test`. Tests run against `<POSTGRES_DB>_test` (auto-created,
+  migrated and seeded by `tests/conftest.py`) — never the dev database.
+- Use the fixtures: `client` (httpx ASGI), `auth_headers`, `operator`,
+  `sent_codes` (captures OTPs instead of sending), `dev_static_otp`.
+  `DEV_STATIC_OTP` is forced OFF unless a test asks for it.
+- Tables a test writes to must be listed in `_MUTABLE_TABLES` in conftest so
+  they are truncated between tests.
+- Assert the envelope (`{"data","meta"}` / `{"errors"}`) and exact key sets
+  of contract shapes, not just status codes.
 
 ## Logging & security
 

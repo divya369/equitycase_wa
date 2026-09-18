@@ -1,3 +1,5 @@
+from typing import Literal
+
 import structlog
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
@@ -22,6 +24,7 @@ class AppConfig(BaseSettings):
     jwt_secret: SecretStr = Field(min_length=32)
     jwt_ttl_hours: int = Field(default=720, gt=0)
     dev_static_otp: SecretStr | None = None
+    otp_channel: Literal["sms", "whatsapp"] = "sms"
 
     # Meta WhatsApp Cloud API — secrets stay in env, never in the DB
     meta_access_token: SecretStr

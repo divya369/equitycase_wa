@@ -2,6 +2,7 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from errors.codes import ErrorCode
@@ -54,6 +55,21 @@ async def http_error_handler(
     )
 
 
+async def rate_limit_error_handler(
+    request: Request,
+    exc: RateLimitExceeded,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content=error_response(
+            code=ErrorCode.RATE_LIMITED,
+            message="Too many requests. Try again later.",
+            request_id=get_request_id(request),
+            details={"limit": str(exc.detail)},
+        ),
+    )
+
+
 async def validation_error_handler(
     request: Request,
     exc: RequestValidationError,
@@ -93,6 +109,11 @@ def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         AppError,
         app_error_handler,
+    )
+
+    app.add_exception_handler(
+        RateLimitExceeded,
+        rate_limit_error_handler,
     )
 
     app.add_exception_handler(
