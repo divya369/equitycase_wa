@@ -9,10 +9,10 @@ endif
 
 
 dev:
-	uv run uvicorn src.main:app --reload --host $(APP_HOST) --port $(APP_PORT)
+	uv run uvicorn main:app --app-dir src --reload --host $(APP_HOST) --port $(APP_PORT)
 
 start:
-	uv run uvicorn src.main:app --host $(APP_HOST) --port $(APP_PORT) 
+	uv run uvicorn main:app --app-dir src --host $(APP_HOST) --port $(APP_PORT)
 
 lint:
 	uv run ruff check .

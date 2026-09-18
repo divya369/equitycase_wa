@@ -1,5 +1,5 @@
 [project]
-name = "fastapi-templete"
+name = "equitycase_wa_backend"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-fastapi-templete = "fastapi_templete:main"
+equitycase_wa_backend = "equitycase_wa_backend:main"
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]
