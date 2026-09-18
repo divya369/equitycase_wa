@@ -1,9 +1,21 @@
 import uuid
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from core.time import to_unix_str
 from modules.messages.models import Message, MessageStatus
+
+ClientMsgIdStr = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)
+]
+# WhatsApp's text body limit
+TextBodyStr = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4096)
+]
+WamidStr = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)
+]
 
 
 class TextBody(BaseModel):
@@ -14,6 +26,20 @@ class MessageContext(BaseModel):
     """The wamid this message replies to."""
 
     id: str
+
+
+class ReplyContextIn(BaseModel):
+    id: WamidStr
+
+
+class SendMessageIn(BaseModel):
+    # the client's optimistic uuid — the idempotency key
+    client_msg_id: ClientMsgIdStr
+    # media / templates arrive in P10 / P11
+    type: Literal["text"] = "text"
+    body: TextBodyStr
+    # optional reply, same shape as message.context
+    context: ReplyContextIn | None = None
 
 
 class MessageError(BaseModel):

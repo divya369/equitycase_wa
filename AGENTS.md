@@ -225,8 +225,16 @@ The payload inside `data` must match exactly:
 - `make test`. Tests run against `<POSTGRES_DB>_test` (auto-created,
   migrated and seeded by `tests/conftest.py`) — never the dev database.
 - Use the fixtures: `client` (httpx ASGI), `auth_headers`, `operator`,
-  `sent_codes` (captures OTPs instead of sending), `dev_static_otp`.
+  `business`, `sent_codes` (captures OTPs instead of sending),
+  `dev_static_otp`, `meta` (autouse `FakeMeta` — records sends, set
+  `.error` to fail them; tests never hit the real Graph API).
   `DEV_STATIC_OTP` is forced OFF unless a test asks for it.
+- Row builders and shared asserts live in `tests/factories.py`
+  (`make_chat`, `make_open_chat`, `make_messages`, `assert_error`, ...).
+- The ASGI test client does NOT run the lifespan: anything created there
+  (`app.state.meta`) is reached through a dependency tests can override.
+- BackgroundTasks finish before the ASGI test client returns, so a test can
+  assert the post-send state right after the POST.
 - Tables a test writes to must be listed in `_MUTABLE_TABLES` in conftest so
   they are truncated between tests.
 - Assert the envelope (`{"data","meta"}` / `{"errors"}`) and exact key sets

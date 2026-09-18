@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from core.time import utcnow
 from modules.chats.models import Chat
 from modules.contacts.models import Contact
 from modules.messages.models import Message
@@ -55,6 +56,17 @@ class ChatRepository:
         """Cascades to the chat's messages."""
         stmt = delete(Chat).where(Chat.id == chat_id).returning(Chat.id)
         return (await self.session.exec(stmt)).scalar_one_or_none() is not None
+
+    async def set_last_message(
+        self, chat: Chat, message_id: uuid.UUID | None, *, touch: bool
+    ) -> Chat:
+        """touch=True bumps updated_at (new activity reorders the chat list)."""
+        chat.last_message_id = message_id
+        if touch:
+            chat.updated_at = utcnow()
+        self.session.add(chat)
+        await self.session.flush()
+        return chat
 
     async def reset_after_clear(self, chat: Chat) -> Chat:
         chat.last_message_id = None

@@ -69,7 +69,9 @@ from config.app_config import app_config  # noqa: E402
 from core.database import SessionFactory  # noqa: E402
 from core.rate_limit import limiter  # noqa: E402
 from core.security import create_access_token  # noqa: E402
+from integrations.meta.dependencies import get_meta_client  # noqa: E402
 from main import app  # noqa: E402
+from modules.business.repository import BusinessRepository  # noqa: E402
 from modules.operator.repository import OperatorRepository  # noqa: E402
 
 # Tables tests may write to; the seeded singletons are left alone.
@@ -98,6 +100,42 @@ async def client():
 async def operator():
     async with SessionFactory() as session:
         return await OperatorRepository(session).get()
+
+
+@pytest.fixture
+async def business():
+    async with SessionFactory() as session:
+        return await BusinessRepository(session).get()
+
+
+class FakeMeta:
+    """Stands in for MetaClient. Set `.error` to make the next sends raise."""
+
+    def __init__(self):
+        self.sent: list[dict] = []
+        self.error: Exception | None = None
+
+    async def send_text(self, *, phone_number_id, to, body, reply_to_wamid=None):
+        self.sent.append(
+            {
+                "phone_number_id": phone_number_id,
+                "to": to,
+                "body": body,
+                "reply_to_wamid": reply_to_wamid,
+            }
+        )
+        if self.error is not None:
+            raise self.error
+        return f"wamid.fake.{len(self.sent)}"
+
+
+@pytest.fixture(autouse=True)
+def meta():
+    """Every test gets a fake Meta client — tests never call the real API."""
+    fake = FakeMeta()
+    app.dependency_overrides[get_meta_client] = lambda: fake
+    yield fake
+    app.dependency_overrides.pop(get_meta_client, None)
 
 
 @pytest.fixture

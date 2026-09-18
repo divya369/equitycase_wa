@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from config.app_config import app_config
 from core.database import SessionFactory, engine
+from integrations.meta.client import MetaClient, create_http_client
 from modules.business.models import BusinessNumber
 from modules.business.repository import BusinessRepository
 from modules.operator.repository import OperatorRepository
@@ -53,8 +54,13 @@ async def lifespan(app: FastAPI):
     _check_dev_static_otp()
     app.state.business = await _load_seeded_rows()
 
-    yield
+    http = create_http_client()
+    app.state.meta = MetaClient(http)
 
-    await engine.dispose()
+    try:
+        yield
+    finally:
+        await http.aclose()
+        await engine.dispose()
 
     logger.info("application_stopping")
