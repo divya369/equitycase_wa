@@ -1,0 +1,103 @@
+# CI: every push to any branch (and every pull request).
+# lint -> tests against a throwaway Postgres -> the production image builds.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version-file: .python-version
+          enable-cache: true
+
+      - run: uv sync --locked
+
+      - name: ruff check
+        run: uv run ruff check .
+
+      - name: ruff format --check
+        run: uv run ruff format --check .
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: equitycase
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_DB: equitycase
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U equitycase -d equitycase"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    # Dummy values only: tests never call Meta, FCM or SMS (fakes in conftest).
+    # conftest switches DATABASE_URL to <db>_test, then migrates + seeds it.
+    env:
+      APP_NAME: equitycase-wa-backend
+      APP_ENV: test
+      APP_HOST: 127.0.0.1
+      APP_PORT: "8080"
+      DATABASE_URL: postgresql+asyncpg://equitycase:ci-password@127.0.0.1:5432/equitycase
+      JWT_SECRET: ci-jwt-secret-not-used-anywhere-else-0123456789
+      META_ACCESS_TOKEN: ci-meta-access-token
+      META_APP_SECRET: ci-meta-app-secret
+      META_VERIFY_TOKEN: ci-meta-verify-token
+      META_API_VERSION: v23.0
+      BUSINESS_PHONE_NUMBER_ID: "100000000000001"
+      BUSINESS_DISPLAY_PHONE: "+91 22 4000 1234"
+      BUSINESS_VERIFIED_NAME: Equity Case CI
+      OWNER_PHONE: "+919999900000"
+      OWNER_NAME: CI Operator
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version-file: .python-version
+          enable-cache: true
+
+      - run: uv sync --locked
+
+      - name: pytest
+        run: uv run pytest -q
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build only (no push): proves the image still builds on this branch
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

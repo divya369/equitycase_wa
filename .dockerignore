@@ -30,6 +30,7 @@ secrets/
 
 # VCS, docs, dev tooling, tests
 .git/
+.github/
 .gitignore
 .pre-commit-config.yaml
 tests/
