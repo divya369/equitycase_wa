@@ -7,6 +7,7 @@ config and the engine are built at import time.
 """
 
 import asyncio
+import json
 import os
 import subprocess
 import sys
@@ -73,6 +74,7 @@ from integrations.meta.dependencies import get_meta_client  # noqa: E402
 from main import app  # noqa: E402
 from modules.business.repository import BusinessRepository  # noqa: E402
 from modules.operator.repository import OperatorRepository  # noqa: E402
+from realtime.manager import ws_manager  # noqa: E402
 
 # Tables tests may write to; the seeded singletons are left alone.
 _MUTABLE_TABLES = (
@@ -93,7 +95,33 @@ async def _clean_state():
             text(f"TRUNCATE {', '.join(_MUTABLE_TABLES)} RESTART IDENTITY")
         )
         await session.commit()
+    ws_manager.connections.clear()
     yield
+
+
+class RecordingSocket:
+    """Stands in for a connected WebSocket; keeps every frame it is sent."""
+
+    def __init__(self):
+        self.frames: list[dict] = []
+
+    async def send_text(self, data: str) -> None:
+        self.frames.append(json.loads(data))
+
+    def of_type(self, event_type: str) -> list[dict]:
+        return [f["data"] for f in self.frames if f["type"] == event_type]
+
+    @property
+    def types(self) -> list[str]:
+        return [f["type"] for f in self.frames]
+
+
+@pytest.fixture
+def ws() -> RecordingSocket:
+    """One connected WS client that records the broadcast frames."""
+    socket = RecordingSocket()
+    ws_manager.add(socket)
+    return socket
 
 
 @pytest.fixture

@@ -231,8 +231,25 @@ The payload inside `data` must match exactly:
 
 ## Realtime & push
 
-- `/ws?token=`: validate JWT **before** `accept()`; bad token -> close 1008.
-  Keep a set of sockets; drop any socket that errors during broadcast.
+- `/ws?token=`: validate JWT **before** `accept()`; bad token -> close 1008
+  (over the wire that is a rejected handshake, HTTP 403). Keep a set of
+  sockets; drop any socket that errors during broadcast. Client `ping` ->
+  `pong`; 60s without any frame -> close 1000.
+- Code: `realtime/manager.py` (`ws_manager`, `WsEvent`), `realtime/events.py`
+  (builders — payloads come from `MessageOut`/`ChatOut`, never hand-built),
+  `realtime/router.py`.
+- **Publish only after the commit.** Services publish right after
+  `session.commit()`; `WebhookProcessor` collects the events of one webhook
+  event (`InboundMessageHandler.events`) and publishes after its commit.
+  A failed / no-op change (duplicate, stale status, idempotent resend)
+  publishes nothing.
+- Events: inbound -> `message.new` + `chat.updated`; status change / send
+  result / retry -> `message.status` (`id, wamid, status, client_msg_id`,
+  plus `chat_id`, `error`); send / read / clear -> `chat.updated`; message
+  delete -> `message.deleted` (+ `chat.updated` if it was the last);
+  chat or contact delete -> `chat.deleted`.
+- Tests: the `ws` fixture registers a recording socket (`ws.types`,
+  `ws.of_type(...)`); the handshake is tested with Starlette's `TestClient`.
 - **Exactly one uvicorn worker** — the socket set is in-process memory.
 - FCM: data-only messages, all values strings; skip when any WS client is
   connected or the chat is muted; delete UNREGISTERED tokens.

@@ -2,7 +2,8 @@
 startup (replay) and right after a send gets its wamid.
 
 Every event runs in its OWN session + transaction; a failing event stays
-unprocessed (processed_at IS NULL) and is retried on the next replay.
+unprocessed (processed_at IS NULL) and is retried on the next replay. Its WS
+events are published only after that transaction commits.
 """
 
 from datetime import timedelta
@@ -18,6 +19,8 @@ from modules.messages.repository import MessageRepository
 from modules.webhook.inbound import InboundMessageHandler
 from modules.webhook.models import WebhookEvent
 from modules.webhook.repository import WebhookEventRepository
+from realtime import events as ws_events
+from realtime.manager import WsEvent, ws_manager
 
 logger = structlog.get_logger("webhook_processor")
 
@@ -61,30 +64,39 @@ class WebhookProcessor:
             event = await events.get(key)
             if event is None or event.processed_at is not None:
                 return
+            out: list[WsEvent] = []
             try:
-                done = await self._apply(session, event)
+                done = await self._apply(session, event, out)
                 if done:
                     await events.mark_processed(key)
                 await session.commit()
             except Exception:
                 await session.rollback()
                 logger.exception("webhook_event_failed", event_key=key)
+                return
+        await ws_manager.publish(*out)
 
-    async def _apply(self, session: AsyncSession, event: WebhookEvent) -> bool:
+    async def _apply(
+        self, session: AsyncSession, event: WebhookEvent, out: list[WsEvent]
+    ) -> bool:
         """True when the event is finished with (applied or deliberately
-        ignored); False to leave it for a later retry."""
+        ignored); False to leave it for a later retry. WS events go to `out`."""
         kind = event.payload.get("kind")
         if kind == "status":
-            return await self._apply_status(session, event)
+            return await self._apply_status(session, event, out)
         if kind == "message":
-            await InboundMessageHandler(session).handle(
+            handler = InboundMessageHandler(session)
+            await handler.handle(
                 event.payload["message"], event.payload.get("contacts") or []
             )
+            out.extend(handler.events)
             return True
         logger.warning("webhook_event_kind_unknown", event_key=event.event_key)
         return True
 
-    async def _apply_status(self, session: AsyncSession, event: WebhookEvent) -> bool:
+    async def _apply_status(
+        self, session: AsyncSession, event: WebhookEvent, out: list[WsEvent]
+    ) -> bool:
         status: dict[str, Any] = event.payload["status"]
         new = STATUS_BY_LABEL.get(status.get("status"))
         if new is None:
@@ -115,5 +127,7 @@ class WebhookProcessor:
             message_id=str(message.id),
             status=new.label,
         )
-        # the message.status WS broadcast is wired in P7
+        if changed:
+            await session.refresh(message)
+            out.append(ws_events.message_status(message))
         return True

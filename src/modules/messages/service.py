@@ -20,6 +20,8 @@ from modules.chats.repository import ChatRepository
 from modules.messages.models import Message, MessageDirection, MessageStatus
 from modules.messages.repository import MessageRepository
 from modules.webhook.processor import WebhookProcessor
+from realtime import events as ws_events
+from realtime.manager import ws_manager
 
 logger = structlog.get_logger("message_service")
 
@@ -110,7 +112,14 @@ class MessageService:
             return existing, False
 
         logger.info("message_queued", chat_id=str(chat_id), message_id=str(message.id))
+        await self._publish_chat(chat_id)
         return message, True
+
+    async def _publish_chat(self, chat_id: uuid.UUID) -> None:
+        """chat.updated with the committed state (last_message / order)."""
+        row = await self.chats.get_row(chat_id)
+        if row is not None:
+            await ws_manager.publish(ws_events.chat_updated(row))
 
     async def retry(self, message_id: uuid.UUID) -> Message:
         """failed -> pending, then redeliver. The ONLY backwards status move."""
@@ -132,6 +141,8 @@ class MessageService:
         await self.session.refresh(message)
 
         logger.info("message_retry_queued", message_id=str(message_id))
+        # other devices: failed -> pending
+        await ws_manager.publish(ws_events.message_status(message))
         return message
 
     async def delete_message(self, chat_id: uuid.UUID, message_id: uuid.UUID) -> None:
@@ -141,11 +152,16 @@ class MessageService:
             await self.session.rollback()
             raise NotFoundError("Message not found")
 
-        if chat.last_message_id == message_id:
+        was_last = chat.last_message_id == message_id
+        if was_last:
             newest = await self.messages.newest_id(chat_id)
             await self.chats.set_last_message(chat, newest, touch=False)
         await self.session.commit()
         logger.info("message_deleted", chat_id=str(chat_id), message_id=str(message_id))
+
+        await ws_manager.publish(ws_events.message_deleted(chat_id, message_id))
+        if was_last:
+            await self._publish_chat(chat_id)
 
 
 class MessageDelivery:
@@ -184,6 +200,7 @@ class MessageDelivery:
                     code=e.code,
                     window_closed=e.is_window_closed,
                 )
+                await self._publish_status(session, message)
                 return
             except Exception:
                 await session.rollback()
@@ -192,12 +209,19 @@ class MessageDelivery:
                 )
                 await session.commit()
                 logger.exception("message_send_crashed", message_id=str(message_id))
+                await self._publish_status(session, message)
                 return
 
             await messages.mark_sent(message_id, wamid)
             await session.commit()
             logger.info("message_sent", message_id=str(message_id))
-            # the message.status WS broadcast is wired in P7
+            await self._publish_status(session, message)
 
         # a 'delivered'/'read' webhook may have beaten our own commit above
         await WebhookProcessor().process_pending_statuses(wamid)
+
+    @staticmethod
+    async def _publish_status(session: AsyncSession, message: Message) -> None:
+        """message.status with the committed row (sent / failed + error)."""
+        await session.refresh(message)
+        await ws_manager.publish(ws_events.message_status(message))

@@ -1,7 +1,7 @@
 """Inbound customer messages (webhook `messages[]`) -> contact, chat, message.
 
 Runs inside WebhookProcessor, in the processor's own session. The caller
-commits.
+commits, then publishes `events`.
 """
 
 from dataclasses import dataclass
@@ -19,6 +19,8 @@ from modules.contacts.models import Contact
 from modules.contacts.repository import ContactRepository
 from modules.messages.models import Message, MessageDirection, MessageStatus
 from modules.messages.repository import MessageRepository
+from realtime import events as ws_events
+from realtime.manager import WsEvent
 
 logger = structlog.get_logger("webhook_inbound")
 
@@ -98,6 +100,8 @@ class InboundMessageHandler:
         self.contacts = ContactRepository(session)
         self.chats = ChatRepository(session)
         self.messages = MessageRepository(session)
+        # WS events for the caller to publish after its commit
+        self.events: list[WsEvent] = []
 
     async def handle(
         self, message: dict[str, Any], contacts: list[dict[str, Any]]
@@ -144,7 +148,9 @@ class InboundMessageHandler:
             message_id=str(stored.id),
             type=parsed.type,
         )
-        # message.new + chat.updated WS broadcasts are wired in P7, FCM in P8
+        self.events.append(ws_events.message_new(stored))
+        self.events.append(ws_events.chat_updated(await self.chats.get_row(chat.id)))
+        # FCM push is wired in P8
         return stored
 
     async def _upsert_contact(self, wa_id: str, name: str | None) -> Contact:

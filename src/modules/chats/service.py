@@ -12,6 +12,8 @@ from modules.chats.models import Chat
 from modules.chats.repository import ChatRepository, ChatRow
 from modules.contacts.repository import ContactRepository
 from modules.messages.repository import MessageRepository
+from realtime import events as ws_events
+from realtime.manager import ws_manager
 
 logger = structlog.get_logger("chat_service")
 
@@ -44,10 +46,14 @@ class ChatService:
         chat = await self.get_chat(chat_id)
         changed = await self.messages.mark_inbound_read(chat.id)
         wamid = await self.messages.newest_inbound_wamid(chat.id)
-        if chat.unread_count:
+        had_unread = chat.unread_count > 0
+        if had_unread:
             chat.unread_count = 0
             await self.chats.save(chat)
         await self.session.commit()
+        if had_unread or changed:
+            # other devices drop the unread badge
+            await self._publish_chat(chat.id)
 
         # nothing newly read -> no Meta call (reopening a read chat is free)
         if not changed or wamid is None:
@@ -61,7 +67,12 @@ class ChatService:
             logger.warning("meta_mark_read_failed", chat_id=str(chat_id), code=e.code)
             return
         logger.info("chat_marked_read", chat_id=str(chat_id), messages=changed)
-        # the chat.updated WS broadcast is wired in P7
+
+    async def _publish_chat(self, chat_id: uuid.UUID) -> None:
+        """chat.updated with the committed state."""
+        row = await self.chats.get_row(chat_id)
+        if row is not None:
+            await ws_manager.publish(ws_events.chat_updated(row))
 
     async def get_chat(self, chat_id: uuid.UUID) -> Chat:
         chat = await self.chats.get(chat_id)
@@ -95,6 +106,7 @@ class ChatService:
             raise NotFoundError("Chat not found")
         await self.session.commit()
         logger.info("chat_deleted", chat_id=str(chat_id))
+        await ws_manager.publish(ws_events.chat_deleted(chat_id))
 
     async def clear_chat(self, chat_id: uuid.UUID) -> None:
         """Delete every message but keep the chat row. Local only."""
@@ -103,3 +115,4 @@ class ChatService:
         await self.messages.delete_by_chat(chat.id)
         await self.session.commit()
         logger.info("chat_cleared", chat_id=str(chat_id))
+        await self._publish_chat(chat.id)
