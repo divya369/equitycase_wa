@@ -65,3 +65,8 @@ def configure_logging() -> None:
         logger = logging.getLogger(logger_name)
         logger.handlers.clear()
         logger.propagate = True
+
+    # httpx logs every request URL at INFO — the SMS URL carries the API key
+    # and the OTP code
+    for logger_name in ("httpx", "httpcore"):
+        logging.getLogger(logger_name).setLevel(logging.WARNING)

@@ -26,6 +26,12 @@ class AppConfig(BaseSettings):
     dev_static_otp: SecretStr | None = None
     otp_channel: Literal["sms", "whatsapp"] = "sms"
 
+    # SMS OTP (SMSForYou) — all three set = real SMS, else nothing is sent
+    sms_api_url: str | None = None
+    sms_api_key: SecretStr | None = None
+    sender_id: str | None = None
+    sms_http_timeout_seconds: float = 10.0
+
     # Meta WhatsApp Cloud API — secrets stay in env, never in the DB
     meta_access_token: SecretStr
     meta_app_secret: SecretStr

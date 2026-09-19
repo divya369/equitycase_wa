@@ -217,7 +217,11 @@ The payload inside `data` must match exactly:
 ## OTP / Auth
 
 - OTP is delivered by **SMS (SMSForYou)** through an `OtpSender` in
-  `integrations/sms/` — not a WhatsApp template.
+  `integrations/sms/` — not a WhatsApp template. `SmsForYouSender` is used
+  when `SMS_API_URL`, `SMS_API_KEY` and `SENDER_ID` are all set. The message
+  text is the DLT-approved template (`OTP_MESSAGE`) — change it only together
+  with DLT. Sent once, never retried. The request URL holds the key and code,
+  so httpx request logging stays at WARNING.
 - argon2 hash at rest, 5-minute expiry, max 5 attempts, newest unconsumed code
   wins, rate-limited by IP (slowapi) on request AND verify.
 - Unknown phone on `otp/request` -> still 204, send nothing.
