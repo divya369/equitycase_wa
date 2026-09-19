@@ -19,6 +19,7 @@ from modules.chats.models import Chat
 from modules.chats.repository import ChatRepository
 from modules.messages.models import Message, MessageDirection, MessageStatus
 from modules.messages.repository import MessageRepository
+from modules.webhook.processor import WebhookProcessor
 
 logger = structlog.get_logger("message_service")
 
@@ -197,3 +198,6 @@ class MessageDelivery:
             await session.commit()
             logger.info("message_sent", message_id=str(message_id))
             # the message.status WS broadcast is wired in P7
+
+        # a 'delivered'/'read' webhook may have beaten our own commit above
+        await WebhookProcessor().process_pending_statuses(wamid)

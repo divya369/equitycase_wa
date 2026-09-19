@@ -11,12 +11,12 @@ UVICORN := uv run uvicorn main:app --app-dir src --host $(APP_HOST) --port $(APP
 
 .PHONY: help up down down-v logs psql \
 	migration migrate downgrade downgrade-base history current \
-	seed dev start lint format check test
+	seed dev start webhook-sample lint format check test
 
 help:
 	@echo "Docker:     up | down | down-v | logs | psql"
 	@echo "Migrations: migration m=\"message\" | migrate | downgrade | downgrade-base | history | current"
-	@echo "App:        seed | dev | start"
+	@echo "App:        seed | dev | start | webhook-sample"
 	@echo "Quality:    lint | format | check | test"
 
 # ---------------------------------------------------------------------------
@@ -74,6 +74,13 @@ dev:
 
 start:
 	$(UVICORN)
+
+# Signed sample webhook body for api.rest -> .webhook/body.json
+#   make webhook-sample [kind=status|message] [status=sent|delivered|read|failed]
+#                       [wamid=...] [from=919...] [text="..."]
+webhook-sample:
+	uv run python -m scripts.webhook_sample --kind=$(kind) --status=$(status) \
+		--wamid=$(wamid) --from=$(from) --text="$(text)"
 
 # ---------------------------------------------------------------------------
 # Quality

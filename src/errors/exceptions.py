@@ -66,7 +66,7 @@ class ConversationWindowClosedError(AppError):
         self,
         message: str = (
             "The 24-hour conversation window is closed. "
-            "Only approved templates can be sent."
+            "The customer must message you first."
         ),
     ):
         super().__init__(

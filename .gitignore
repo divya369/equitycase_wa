@@ -16,6 +16,9 @@ wheels/
 # Service-account keys and other credentials
 secrets/
 
+# Generated signed webhook bodies (make webhook-sample)
+.webhook/
+
 .ruff_cache
 
 .pytest_cache/

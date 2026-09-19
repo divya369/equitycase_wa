@@ -75,7 +75,14 @@ from modules.business.repository import BusinessRepository  # noqa: E402
 from modules.operator.repository import OperatorRepository  # noqa: E402
 
 # Tables tests may write to; the seeded singletons are left alone.
-_MUTABLE_TABLES = ("otp_codes", "fcm_tokens", "contacts", "chats", "messages")
+_MUTABLE_TABLES = (
+    "otp_codes",
+    "fcm_tokens",
+    "contacts",
+    "chats",
+    "messages",
+    "webhook_events",
+)
 
 
 @pytest.fixture(autouse=True)

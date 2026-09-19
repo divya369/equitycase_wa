@@ -25,6 +25,7 @@ make history / current
 make seed                                    # idempotent singleton rows
 make dev                                     # reload, ONE worker
 make start                                   # ONE worker
+make webhook-sample [kind= status= wamid=]   # signed body for api.rest
 make lint / format / check / test
 ```
 
@@ -188,6 +189,16 @@ The payload inside `data` must match exactly:
   (`msg:<wamid>` / `status:<wamid>:<status>`, `ON CONFLICT DO NOTHING`) ->
   return 200 -> process in background. Replay `processed_at IS NULL` rows on
   startup.
+- Webhook code: `modules/webhook/` — `service.py` (handshake, signature,
+  `extract_events`, persist), `processor.py` (`WebhookProcessor`: applies
+  events, each in its own session; returns False to leave an event for a
+  later retry). Events for another `phone_number_id` are ignored.
+- A status whose wamid we don't know yet waits (it may have beaten our own
+  send commit; `MessageDelivery` re-runs pending statuses after storing the
+  wamid) and is dropped after `UNMATCHED_STATUS_TTL` (1h).
+- Manual webhook tests: `api.rest` (VS Code REST Client) +
+  `make webhook-sample`. The body is signed byte-for-byte — never edit
+  `.webhook/body.json` by hand.
 - Media URLs from Meta expire in ~5 min: download immediately, store in R2,
   serve signed URLs. Bucket stays private.
 

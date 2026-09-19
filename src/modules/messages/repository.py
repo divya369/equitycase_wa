@@ -49,7 +49,23 @@ class MessageRepository:
         await self.session.flush()
         return message
 
+    async def get_by_wamid(self, wamid: str) -> Message | None:
+        stmt = select(Message).where(Message.wamid == wamid)
+        return (await self.session.exec(stmt)).first()
+
     # -- status transitions: MONOTONIC (WHERE status < :new) -----------------
+    async def advance_status(
+        self, message_id: uuid.UUID, status: MessageStatus
+    ) -> bool:
+        """False when the message is already at or past `status` — Meta
+        delivers webhooks out of order and a late 'sent' must not undo 'read'."""
+        stmt = (
+            update(Message)
+            .where(Message.id == message_id, Message.status < status)
+            .values(status=status)
+        )
+        return (await self.session.exec(stmt)).rowcount > 0
+
     async def mark_sent(self, message_id: uuid.UUID, wamid: str) -> bool:
         stmt = (
             update(Message)

@@ -7,6 +7,7 @@ from modules.contacts.router import router as contacts_router
 from modules.health.router import router as health_router
 from modules.messages.router import router as messages_router
 from modules.operator.router import router as me_router
+from modules.webhook.router import router as webhook_router
 
 # /v1/auth/* — public (OTP login)
 v1_router = APIRouter(prefix="/v1")
@@ -24,4 +25,6 @@ v1_router.include_router(protected_router)
 
 def register_routes(app: FastAPI) -> None:
     app.include_router(health_router)
+    # Meta webhook: signature-verified, no JWT, no envelope
+    app.include_router(webhook_router)
     app.include_router(v1_router)

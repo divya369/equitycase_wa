@@ -9,6 +9,7 @@ from integrations.meta.client import MetaClient, create_http_client
 from modules.business.models import BusinessNumber
 from modules.business.repository import BusinessRepository
 from modules.operator.repository import OperatorRepository
+from modules.webhook.processor import WebhookProcessor
 
 logger = structlog.get_logger("lifespan")
 
@@ -46,6 +47,15 @@ async def _load_seeded_rows() -> BusinessNumber:
     return business
 
 
+async def _replay_webhook_events() -> None:
+    """Events stored before a crash/restart (processed_at IS NULL) get applied
+    now. Never blocks startup on failure."""
+    try:
+        await WebhookProcessor().replay_unprocessed()
+    except Exception:
+        logger.exception("webhook_replay_failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
@@ -56,6 +66,8 @@ async def lifespan(app: FastAPI):
 
     http = create_http_client()
     app.state.meta = MetaClient(http)
+
+    await _replay_webhook_events()
 
     try:
         yield

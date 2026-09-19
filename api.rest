@@ -1,0 +1,72 @@
+# P5 — Meta webhook manual tests
+# VS Code "REST Client" extension (humao.rest-client): click "Send Request".
+#
+# Before the signed requests (7-9), generate a signed body:
+#     make webhook-sample                               (status "delivered")
+#     make webhook-sample status=read wamid=wamid.XXX   (a real wamid)
+#     make webhook-sample kind=message                  (inbound text)
+# then paste the printed "signature" value into @signature below.
+# Check what was stored:   make psql
+#     SELECT event_key, processed_at FROM webhook_events ORDER BY received_at DESC;
+
+# Local server (make dev). Via ngrok use your public https URL instead.
+@base_url = http://127.0.0.1:8080
+# Read from .env (same folder) — never paste the secret here
+@verify_token = {{$dotenv META_VERIFY_TOKEN}}
+@signature = sha256=PASTE_SIGNATURE_FROM_MAKE_WEBHOOK_SAMPLE
+
+
+### 1. Handshake OK -> 200, plain-text body "1158201444"
+GET {{base_url}}/webhook?hub.mode=subscribe&hub.verify_token={{verify_token}}&hub.challenge=1158201444
+
+
+### 2. Handshake, wrong verify token -> 403 forbidden
+GET {{base_url}}/webhook?hub.mode=subscribe&hub.verify_token=wrong-token&hub.challenge=1158201444
+
+
+### 3. Handshake, wrong mode -> 403 forbidden
+GET {{base_url}}/webhook?hub.mode=unsubscribe&hub.verify_token={{verify_token}}&hub.challenge=1158201444
+
+
+### 4. Handshake, no params -> 403 forbidden
+GET {{base_url}}/webhook
+
+
+### 5. POST without signature -> 403 forbidden, nothing stored
+POST {{base_url}}/webhook
+Content-Type: application/json
+
+{"object":"whatsapp_business_account","entry":[]}
+
+
+### 6. POST with a wrong signature -> 403 forbidden, nothing stored
+POST {{base_url}}/webhook
+Content-Type: application/json
+X-Hub-Signature-256: sha256=0000000000000000000000000000000000000000000000000000000000000000
+
+{"object":"whatsapp_business_account","entry":[]}
+
+
+### 7. POST signed sample -> 200 (empty body), one row in webhook_events
+POST {{base_url}}/webhook
+Content-Type: application/json
+X-Hub-Signature-256: {{signature}}
+
+< ./.webhook/body.json
+
+
+### 8. Same request again (Meta redelivery) -> 200, NO second row
+POST {{base_url}}/webhook
+Content-Type: application/json
+X-Hub-Signature-256: {{signature}}
+
+< ./.webhook/body.json
+
+
+### 9. Signed body but the signature is for another body -> 403
+#    (run `make webhook-sample` again WITHOUT updating @signature)
+POST {{base_url}}/webhook
+Content-Type: application/json
+X-Hub-Signature-256: {{signature}}
+
+< ./.webhook/body.json
