@@ -8,7 +8,8 @@
 #   APP_IMAGE=registry/equitycase-wa-backend:<tag> docker compose -f docker-compose.prod.yml up -d
 # (or put APP_IMAGE in .env). Every `up` runs `alembic upgrade head` before the app starts.
 #
-# First deploy only (and whenever the business number / owner changes):
+# Seed: CD runs it once on the first deploy (then creates .seeded). Re-run by
+# hand only when the business number / owner changes:
 #   docker compose -f docker-compose.prod.yml --profile seed run --rm seed
 # Not run on every deploy: it resets the operator name to OWNER_NAME.
 #
