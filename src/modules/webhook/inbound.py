@@ -1,7 +1,7 @@
 """Inbound customer messages (webhook `messages[]`) -> contact, chat, message.
 
 Runs inside WebhookProcessor, in the processor's own session. The caller
-commits, then publishes `events`.
+commits, then publishes `events` and sends `pushes`.
 """
 
 from dataclasses import dataclass
@@ -19,6 +19,7 @@ from modules.contacts.models import Contact
 from modules.contacts.repository import ContactRepository
 from modules.messages.models import Message, MessageDirection, MessageStatus
 from modules.messages.repository import MessageRepository
+from modules.notifications.service import InboundPush
 from realtime import events as ws_events
 from realtime.manager import WsEvent
 
@@ -100,8 +101,9 @@ class InboundMessageHandler:
         self.contacts = ContactRepository(session)
         self.chats = ChatRepository(session)
         self.messages = MessageRepository(session)
-        # WS events for the caller to publish after its commit
+        # WS events + FCM pushes for the caller to send after its commit
         self.events: list[WsEvent] = []
+        self.pushes: list[InboundPush] = []
 
     async def handle(
         self, message: dict[str, Any], contacts: list[dict[str, Any]]
@@ -114,7 +116,7 @@ class InboundMessageHandler:
             logger.info("inbound_message_skipped", type=message.get("type"))
             return None
 
-        await self._upsert_contact(wa_id, profile_name(contacts, wa_id))
+        contact = await self._upsert_contact(wa_id, profile_name(contacts, wa_id))
         chat = await self._lock_chat(wa_id)
 
         # dedupe under the chat lock: a wamid always belongs to this chat
@@ -150,7 +152,7 @@ class InboundMessageHandler:
         )
         self.events.append(ws_events.message_new(stored))
         self.events.append(ws_events.chat_updated(await self.chats.get_row(chat.id)))
-        # FCM push is wired in P8
+        self.pushes.append(InboundPush.build(chat, contact, stored))
         return stored
 
     async def _upsert_contact(self, wa_id: str, name: str | None) -> Contact:

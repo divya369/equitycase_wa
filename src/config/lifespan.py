@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from config.app_config import app_config
 from core.database import SessionFactory, engine
+from integrations.fcm.client import init_fcm
 from integrations.meta.client import MetaClient, create_http_client
 from modules.business.models import BusinessNumber
 from modules.business.repository import BusinessRepository
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI):
 
     http = create_http_client()
     app.state.meta = MetaClient(http)
+    init_fcm()
 
     await _replay_webhook_events()
 

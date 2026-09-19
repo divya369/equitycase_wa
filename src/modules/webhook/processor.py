@@ -3,9 +3,10 @@ startup (replay) and right after a send gets its wamid.
 
 Every event runs in its OWN session + transaction; a failing event stays
 unprocessed (processed_at IS NULL) and is retried on the next replay. Its WS
-events are published only after that transaction commits.
+events and FCM pushes go out only after that transaction commits.
 """
 
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
@@ -16,6 +17,7 @@ from core.database import SessionFactory
 from core.time import utcnow
 from modules.messages.models import MessageStatus
 from modules.messages.repository import MessageRepository
+from modules.notifications.service import InboundPush, PushService
 from modules.webhook.inbound import InboundMessageHandler
 from modules.webhook.models import WebhookEvent
 from modules.webhook.repository import WebhookEventRepository
@@ -35,6 +37,14 @@ STATUS_BY_LABEL = {
 # "sent" commit. After this long it's a message we never sent (e.g. from
 # another tool on the same number) — stop retrying it.
 UNMATCHED_STATUS_TTL = timedelta(hours=1)
+
+
+@dataclass
+class AfterCommit:
+    """Side effects of one webhook event, run only once it has committed."""
+
+    events: list[WsEvent] = field(default_factory=list)
+    pushes: list[InboundPush] = field(default_factory=list)
 
 
 class WebhookProcessor:
@@ -64,7 +74,7 @@ class WebhookProcessor:
             event = await events.get(key)
             if event is None or event.processed_at is not None:
                 return
-            out: list[WsEvent] = []
+            out = AfterCommit()
             try:
                 done = await self._apply(session, event, out)
                 if done:
@@ -74,13 +84,15 @@ class WebhookProcessor:
                 await session.rollback()
                 logger.exception("webhook_event_failed", event_key=key)
                 return
-        await ws_manager.publish(*out)
+        await ws_manager.publish(*out.events)
+        for push in out.pushes:
+            await PushService().notify_inbound(push)
 
     async def _apply(
-        self, session: AsyncSession, event: WebhookEvent, out: list[WsEvent]
+        self, session: AsyncSession, event: WebhookEvent, out: AfterCommit
     ) -> bool:
         """True when the event is finished with (applied or deliberately
-        ignored); False to leave it for a later retry. WS events go to `out`."""
+        ignored); False to leave it for a later retry."""
         kind = event.payload.get("kind")
         if kind == "status":
             return await self._apply_status(session, event, out)
@@ -89,13 +101,14 @@ class WebhookProcessor:
             await handler.handle(
                 event.payload["message"], event.payload.get("contacts") or []
             )
-            out.extend(handler.events)
+            out.events.extend(handler.events)
+            out.pushes.extend(handler.pushes)
             return True
         logger.warning("webhook_event_kind_unknown", event_key=event.event_key)
         return True
 
     async def _apply_status(
-        self, session: AsyncSession, event: WebhookEvent, out: list[WsEvent]
+        self, session: AsyncSession, event: WebhookEvent, out: AfterCommit
     ) -> bool:
         status: dict[str, Any] = event.payload["status"]
         new = STATUS_BY_LABEL.get(status.get("status"))
@@ -129,5 +142,5 @@ class WebhookProcessor:
         )
         if changed:
             await session.refresh(message)
-            out.append(ws_events.message_status(message))
+            out.events.append(ws_events.message_status(message))
         return True

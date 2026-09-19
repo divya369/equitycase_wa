@@ -70,6 +70,7 @@ from config.app_config import app_config  # noqa: E402
 from core.database import SessionFactory  # noqa: E402
 from core.rate_limit import limiter  # noqa: E402
 from core.security import create_access_token  # noqa: E402
+from integrations.fcm.client import set_fcm_client  # noqa: E402
 from integrations.meta.dependencies import get_meta_client  # noqa: E402
 from main import app  # noqa: E402
 from modules.business.repository import BusinessRepository  # noqa: E402
@@ -178,6 +179,32 @@ def meta():
     app.dependency_overrides[get_meta_client] = lambda: fake
     yield fake
     app.dependency_overrides.pop(get_meta_client, None)
+
+
+class FakeFcm:
+    """Stands in for FcmClient. `dead` = tokens to report as unregistered;
+    set `.error` to make sends raise."""
+
+    def __init__(self):
+        # (tokens, data) per send_data call
+        self.sent: list[tuple[list[str], dict[str, str]]] = []
+        self.dead: set[str] = set()
+        self.error: Exception | None = None
+
+    async def send_data(self, tokens, data):
+        self.sent.append((list(tokens), dict(data)))
+        if self.error is not None:
+            raise self.error
+        return [t for t in tokens if t in self.dead]
+
+
+@pytest.fixture(autouse=True)
+def fcm():
+    """Every test gets a fake FCM client — tests never call Firebase."""
+    fake = FakeFcm()
+    set_fcm_client(fake)
+    yield fake
+    set_fcm_client(None)
 
 
 @pytest.fixture

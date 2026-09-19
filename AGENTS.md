@@ -253,6 +253,17 @@ The payload inside `data` must match exactly:
 - **Exactly one uvicorn worker** — the socket set is in-process memory.
 - FCM: data-only messages, all values strings; skip when any WS client is
   connected or the chat is muted; delete UNREGISTERED tokens.
+- FCM code: `integrations/fcm/client.py` (`FcmClient`, built once by
+  `init_fcm()` in lifespan from `FIREBASE_CREDENTIALS`; unset = push off, a
+  bad file fails startup; reached via `get_fcm_client()`), and
+  `modules/notifications/service.py` (`InboundPush` payload
+  `{chat_id, sender_id, sender_name, body}`, `PushService` with the skip rules
+  and dead-token cleanup). Pushes are for inbound messages only, collected in
+  `InboundMessageHandler.pushes` and sent by `WebhookProcessor` after the
+  commit and the WS publish. Messages older than 1h (replays) are not pushed.
+  A push failure is logged, never raised.
+- Tests: the autouse `fcm` fixture (`FakeFcm`: `.sent`, `.dead`, `.error`)
+  — tests never call Firebase.
 - Blocking SDKs (firebase-admin, boto3) only via `asyncio.to_thread`.
 
 ## Config

@@ -43,5 +43,8 @@ class FcmTokenRepository:
     async def delete(self, token: str) -> None:
         await self.session.exec(delete(FcmToken).where(FcmToken.token == token))
 
+    async def delete_many(self, tokens: list[str]) -> None:
+        await self.session.exec(delete(FcmToken).where(FcmToken.token.in_(tokens)))
+
     async def list_tokens(self) -> list[str]:
         return list((await self.session.exec(select(FcmToken.token))).all())
