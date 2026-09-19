@@ -1,3 +1,5 @@
+# The image only needs: pyproject.toml, uv.lock, alembic.ini, migrations/, src/
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -13,14 +15,27 @@ wheels/
 .env.*
 !.env.example
 
-# Service-account keys and other credentials
+# Service-account keys and other credentials (mounted at runtime)
 secrets/
 
 # Generated signed webhook bodies (make webhook-sample)
 .webhook/
 
 .ruff_cache
-
 .pytest_cache/
+.mypy_cache/
 
 .vscode/
+.idea/
+
+# VCS, docs, dev tooling, tests
+.git/
+.gitignore
+.pre-commit-config.yaml
+tests/
+*.md
+api.rest
+Makefile
+Dockerfile
+.dockerignore
+docker-compose*.yml
