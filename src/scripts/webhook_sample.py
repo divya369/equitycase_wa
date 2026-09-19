@@ -2,7 +2,8 @@
 
     make webhook-sample                                   # status "delivered"
     make webhook-sample status=read wamid=wamid.HBgM...
-    make webhook-sample kind=message from=919820011223 text="Hi"
+    make webhook-sample kind=message from=919820011223 text="Hi" name="Ananya"
+    make webhook-send kind=message text="Hi"      # build + sign + POST it
 
 Writes .webhook/body.json (gitignored) and prints the X-Hub-Signature-256
 value to paste into api.rest. The body is signed byte-for-byte, so don't
@@ -15,6 +16,8 @@ import sys
 import time
 import uuid
 from pathlib import Path
+
+import httpx
 
 from config.seed_config import SeedConfig
 from modules.webhook.signature import compute_signature
@@ -33,9 +36,7 @@ def build(args: argparse.Namespace, phone_number_id: str) -> tuple[dict, str]:
         },
     }
     if args.kind == "message":
-        value["contacts"] = [
-            {"profile": {"name": "Test Customer"}, "wa_id": args.sender}
-        ]
+        value["contacts"] = [{"profile": {"name": args.name}, "wa_id": args.sender}]
         value["messages"] = [
             {
                 "from": args.sender,
@@ -76,6 +77,9 @@ def main() -> int:
     parser.add_argument("--wamid", default="")
     parser.add_argument("--from", dest="sender", default="919820011223")
     parser.add_argument("--text", default="Hello from the webhook sample")
+    parser.add_argument("--name", default="Test Customer")
+    # base URL: also POST the signed body there (no copy-paste of signatures)
+    parser.add_argument("--send", default="")
     # make passes empty strings for unset vars
     args = parser.parse_args([a for a in sys.argv[1:] if not a.endswith("=")])
 
@@ -85,9 +89,24 @@ def main() -> int:
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_bytes(body)
 
+    signature = compute_signature(body)
     print(f"wrote     {OUT}")  # noqa: T201
     print(f"kind      {args.kind}  wamid={wamid}")  # noqa: T201
-    print(f"signature {compute_signature(body)}")  # noqa: T201
+    print(f"signature {signature}")  # noqa: T201
+
+    if args.send:
+        url = f"{args.send.rstrip('/')}/webhook"
+        resp = httpx.post(
+            url,
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Hub-Signature-256": signature,
+            },
+            timeout=15,
+        )
+        print(f"sent      POST {url} -> {resp.status_code} {resp.text}")  # noqa: T201
+        return 0 if resp.status_code == 200 else 1
     return 0
 
 

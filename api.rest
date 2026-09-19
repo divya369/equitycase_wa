@@ -123,3 +123,75 @@ Content-Type: application/json
 ### 15. Messages again -> your reply: pending -> sent -> delivered -> read
 GET {{base_url}}/v1/chats/{{chat_id}}/messages
 Authorization: Bearer {{token}}
+
+
+# =============================================================================
+# P8 — push notification test WITHOUT Meta (fake a customer message)
+# =============================================================================
+# The signed webhook below goes straight to OUR /webhook, so Meta's webhook
+# setup is not needed. The backend stores the message and pushes it by FCM.
+#
+# A push is sent only if ALL of these hold:
+#   - the phone registered its FCM token (the app after login, or request 16)
+#   - NO WebSocket client is connected (close the app / disconnect Insomnia)
+#   - the chat is not muted, and the message is new (a fresh wamid each time)
+#   - the app shows DATA-ONLY pushes itself (no `notification` block is sent)
+#
+# EASIEST (no signature copy-paste) — one terminal command per push:
+#     make webhook-send kind=message from=918799190997 name="Test Customer" text="Hello push test"
+#   prints "... -> 200" and the phone gets the push. (url=https://... to go
+#   through ngrok; default is the local server.)
+#
+# Steps (REST Client way):
+#   1. Run 10 (login) once.
+#   2. Run 16 once, with the phone's FCM token pasted into @fcm_token (skip it
+#      if the app already calls POST /v1/me/fcm-token).
+#   3. In the terminal:
+#        make webhook-sample kind=message from=919999900001 name="Test Customer" text="Hello push test"
+#      then paste the printed signature into @push_signature.
+#      NEVER open + save / format .webhook/body.json — it is signed byte for
+#      byte; any reformat = 403 "Invalid signature". Just regenerate it.
+#   4. Run 17 -> 200, and the phone gets "Test Customer: Hello push test".
+#      Terminal log: "fcm_sent" sent=1 = delivered to FCM. "push_skipped" gives
+#      the reason (ws_connected / muted / no_devices / stale).
+#   5. For the next push, repeat 3 + 4 (new signature each time). Running 17
+#      twice with the same body = duplicate = no second push.
+#   6. Finished: 19 removes the test contact + its chat.
+
+@fcm_token = dl5rIsY5SiWXqkN4J5o0zz:APA91bEL3V9kyT9rCKLNvQ5dniqac5XhR9a1WZAgdySGSkM0dDk7p2nA_FcRfURK73cTRNtPX-Rl_U5SLabNcOCoPfDlKmUewM3tVfTsCAaW9QOFYnun4-E
+@push_signature = sha256=56b4342ee8f710f1458f68ca9b3f1b9d39123ddf43792c4e655a18d902e553d6
+@test_customer = 918799190997
+
+
+### 16. Register the phone's FCM token -> 204 (safe to repeat)
+POST {{base_url}}/v1/me/fcm-token
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"token": "{{fcm_token}}", "platform": "android"}
+
+
+### 17. Fake customer message (signed) -> 200 (empty body) + push on the phone
+POST {{base_url}}/webhook
+Content-Type: application/json
+X-Hub-Signature-256: {{push_signature}}
+
+< ./.webhook/body.json
+
+
+### 18. Chats -> "Test Customer" on top with the message, unread_count >= 1
+GET {{base_url}}/v1/chats
+Authorization: Bearer {{token}}
+
+
+### 19. Clean up: delete the test contact (and its chat + messages) -> 204
+DELETE {{base_url}}/v1/contacts/{{test_customer}}
+Authorization: Bearer {{token}}
+
+
+### 20. Stop pushes to this phone -> 204
+DELETE {{base_url}}/v1/me/fcm-token
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"token": "{{fcm_token}}"}

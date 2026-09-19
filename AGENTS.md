@@ -26,6 +26,7 @@ make seed                                    # idempotent singleton rows
 make dev                                     # reload, ONE worker
 make start                                   # ONE worker
 make webhook-sample [kind= status= wamid=]   # signed body for api.rest
+make webhook-send [same options] [url=]      # build + sign + POST it
 make lint / format / check / test
 ```
 

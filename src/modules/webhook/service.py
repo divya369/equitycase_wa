@@ -99,7 +99,13 @@ class WebhookService:
         """Verify, then persist BEFORE the 200 goes back. Returns the keys of
         NEW events, to be processed in the background."""
         if not is_valid_signature(body, signature):
-            logger.warning("webhook_signature_invalid")
+            # sizes only (never the body): a re-formatted test body shows up
+            # as an unexpected body_bytes
+            logger.warning(
+                "webhook_signature_invalid",
+                body_bytes=len(body),
+                has_signature=bool(signature),
+            )
             raise ForbiddenError("Invalid signature")
 
         try:

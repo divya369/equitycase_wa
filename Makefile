@@ -11,12 +11,12 @@ UVICORN := uv run uvicorn main:app --app-dir src --host $(APP_HOST) --port $(APP
 
 .PHONY: help up down down-v logs psql \
 	migration migrate downgrade downgrade-base history current \
-	seed dev start webhook-sample lint format check test
+	seed dev start webhook-sample webhook-send lint format check test
 
 help:
 	@echo "Docker:     up | down | down-v | logs | psql"
 	@echo "Migrations: migration m=\"message\" | migrate | downgrade | downgrade-base | history | current"
-	@echo "App:        seed | dev | start | webhook-sample"
+	@echo "App:        seed | dev | start | webhook-sample | webhook-send"
 	@echo "Quality:    lint | format | check | test"
 
 # ---------------------------------------------------------------------------
@@ -77,10 +77,16 @@ start:
 
 # Signed sample webhook body for api.rest -> .webhook/body.json
 #   make webhook-sample [kind=status|message] [status=sent|delivered|read|failed]
-#                       [wamid=...] [from=919...] [text="..."]
+#                       [wamid=...] [from=919...] [text="..."] [name="..."]
 webhook-sample:
 	uv run python -m scripts.webhook_sample --kind=$(kind) --status=$(status) \
-		--wamid=$(wamid) --from=$(from) --text="$(text)"
+		--wamid=$(wamid) --from=$(from) --text="$(text)" --name="$(name)"
+
+# Same options, and POSTs the signed body to $(url) (default: local server)
+webhook-send:
+	uv run python -m scripts.webhook_sample --kind=$(kind) --status=$(status) \
+		--wamid=$(wamid) --from=$(from) --text="$(text)" --name="$(name)" \
+		--send=$(or $(url),http://127.0.0.1:8080)
 
 # ---------------------------------------------------------------------------
 # Quality
