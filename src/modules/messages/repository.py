@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlmodel import delete, select, update
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from modules.messages.models import Message, MessageStatus
+from modules.messages.models import Message, MessageDirection, MessageStatus
 
 
 class MessageRepository:
@@ -48,6 +48,32 @@ class MessageRepository:
         self.session.add(message)
         await self.session.flush()
         return message
+
+    async def newest_inbound_wamid(self, chat_id: uuid.UUID) -> str | None:
+        stmt = (
+            select(Message.wamid)
+            .where(
+                Message.chat_id == chat_id,
+                Message.direction == MessageDirection.IN,
+                Message.wamid.is_not(None),
+            )
+            .order_by(Message.created_at.desc(), Message.id.desc())
+            .limit(1)
+        )
+        return (await self.session.exec(stmt)).first()
+
+    async def mark_inbound_read(self, chat_id: uuid.UUID) -> int:
+        """Monotonic: only rows below READ move. Returns how many changed."""
+        stmt = (
+            update(Message)
+            .where(
+                Message.chat_id == chat_id,
+                Message.direction == MessageDirection.IN,
+                Message.status < MessageStatus.READ,
+            )
+            .values(status=MessageStatus.READ)
+        )
+        return (await self.session.exec(stmt)).rowcount
 
     async def get_by_wamid(self, wamid: str) -> Message | None:
         stmt = select(Message).where(Message.wamid == wamid)

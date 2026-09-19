@@ -120,6 +120,8 @@ class FakeMeta:
 
     def __init__(self):
         self.sent: list[dict] = []
+        # wamids passed to mark_read
+        self.read: list[str] = []
         self.error: Exception | None = None
 
     async def send_text(self, *, phone_number_id, to, body, reply_to_wamid=None):
@@ -134,6 +136,11 @@ class FakeMeta:
         if self.error is not None:
             raise self.error
         return f"wamid.fake.{len(self.sent)}"
+
+    async def mark_read(self, *, phone_number_id, wamid):
+        self.read.append(wamid)
+        if self.error is not None:
+            raise self.error
 
 
 @pytest.fixture(autouse=True)

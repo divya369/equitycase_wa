@@ -28,6 +28,12 @@ class ContactRepository:
         )
         return (await self.session.exec(stmt)).scalar_one_or_none()
 
+    async def update_name(self, contact: Contact, name: str) -> Contact:
+        contact.name = name
+        self.session.add(contact)
+        await self.session.flush()
+        return contact
+
     async def delete(self, wa_id: str) -> bool:
         stmt = delete(Contact).where(Contact.wa_id == wa_id).returning(Contact.wa_id)
         return (await self.session.exec(stmt)).scalar_one_or_none() is not None

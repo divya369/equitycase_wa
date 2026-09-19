@@ -102,3 +102,15 @@ async def test_unexpected_success_body():
     client, _ = make_client([(200, {"weird": True})])
     with pytest.raises(MetaApiError):
         await send(client)
+
+
+async def test_mark_read_payload():
+    client, calls = make_client([(200, {"success": True})])
+    await client.mark_read(phone_number_id="PNID", wamid="wamid.IN")
+    [req] = calls
+    assert req.url.path == f"/{app_config.meta_api_version}/PNID/messages"
+    assert json.loads(req.content) == {
+        "messaging_product": "whatsapp",
+        "status": "read",
+        "message_id": "wamid.IN",
+    }

@@ -15,6 +15,7 @@ from core.database import SessionFactory
 from core.time import utcnow
 from modules.messages.models import MessageStatus
 from modules.messages.repository import MessageRepository
+from modules.webhook.inbound import InboundMessageHandler
 from modules.webhook.models import WebhookEvent
 from modules.webhook.repository import WebhookEventRepository
 
@@ -76,8 +77,10 @@ class WebhookProcessor:
         if kind == "status":
             return await self._apply_status(session, event)
         if kind == "message":
-            # inbound messages are handled in P6; keep them for replay
-            return False
+            await InboundMessageHandler(session).handle(
+                event.payload["message"], event.payload.get("contacts") or []
+            )
+            return True
         logger.warning("webhook_event_kind_unknown", event_key=event.event_key)
         return True
 

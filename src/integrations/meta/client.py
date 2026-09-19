@@ -99,3 +99,11 @@ class MetaClient:
             return data["messages"][0]["id"]
         except (KeyError, IndexError, TypeError) as e:
             raise MetaApiError(code=None, title="Unexpected WhatsApp response") from e
+
+    async def mark_read(self, *, phone_number_id: str, wamid: str) -> None:
+        """Blue ticks for the customer. Marks this AND every earlier message
+        in the conversation as read."""
+        await self._post(
+            f"{phone_number_id}/messages",
+            {"messaging_product": "whatsapp", "status": "read", "message_id": wamid},
+        )

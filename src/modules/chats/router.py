@@ -31,6 +31,12 @@ async def delete_chat(chat_id: uuid.UUID, service: ChatServiceDep) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/{chat_id}/read", status_code=status.HTTP_204_NO_CONTENT)
+async def mark_chat_read(chat_id: uuid.UUID, service: ChatServiceDep) -> Response:
+    await service.mark_read(chat_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/{chat_id}/clear", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_chat(chat_id: uuid.UUID, service: ChatServiceDep) -> Response:
     await service.clear_chat(chat_id)

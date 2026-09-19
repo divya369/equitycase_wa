@@ -27,6 +27,22 @@ class ChatRepository:
     async def get(self, chat_id: uuid.UUID) -> Chat | None:
         return await self.session.get(Chat, chat_id)
 
+    async def get_by_contact_for_update(self, contact_wa_id: str) -> Chat | None:
+        """Row-locked until commit: serialises concurrent inbound processing
+        for the same chat (unread_count, last_message_id)."""
+        stmt = (
+            select(Chat)
+            .where(Chat.contact_wa_id == contact_wa_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return (await self.session.exec(stmt)).first()
+
+    async def save(self, chat: Chat) -> Chat:
+        self.session.add(chat)
+        await self.session.flush()
+        return chat
+
     async def get_row(self, chat_id: uuid.UUID) -> ChatRow | None:
         stmt = self._rows().where(Chat.id == chat_id)
         row = (await self.session.exec(stmt)).first()

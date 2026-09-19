@@ -10,7 +10,7 @@
 #     SELECT event_key, processed_at FROM webhook_events ORDER BY received_at DESC;
 
 # Local server (make dev). Via ngrok use your public https URL instead.
-@base_url = http://127.0.0.1:8080
+@base_url = https://nonmythologic-unobstructive-sherice.ngrok-free.dev
 # Read from .env (same folder) — never paste the secret here
 @verify_token = {{$dotenv META_VERIFY_TOKEN}}
 @signature = sha256=PASTE_SIGNATURE_FROM_MAKE_WEBHOOK_SAMPLE
@@ -70,3 +70,56 @@ Content-Type: application/json
 X-Hub-Signature-256: {{signature}}
 
 < ./.webhook/body.json
+
+
+# =============================================================================
+# P6 — inbound messages + chat read
+# =============================================================================
+# Real test (best): send "Hi" from your phone's WhatsApp to the business
+# number (ngrok running), then run 10 -> 11 -> 12 -> 13 -> 14.
+# Local test: `make webhook-sample kind=message from=918799190997`, paste the
+# signature into @signature, send request 7, then run 10 -> 14.
+# NOTE: 14 sends a REAL WhatsApp message — only within 24h of the customer's
+# last message, otherwise 409 conversation_window_closed.
+
+@phone = {{$dotenv OWNER_PHONE}}
+@otp = {{$dotenv DEV_STATIC_OTP}}
+@token = {{login.response.body.$.data.token}}
+@chat_id = {{chats.response.body.$.data[0].id}}
+
+
+### 10. Login (DEV_STATIC_OTP) — the token is picked up automatically
+# @name login
+POST {{base_url}}/v1/auth/otp/verify
+Content-Type: application/json
+
+{"phone": "{{phone}}", "code": "{{otp}}"}
+
+
+### 11. Chats -> the customer's chat is first, unread_count >= 1
+# @name chats
+GET {{base_url}}/v1/chats
+Authorization: Bearer {{token}}
+
+
+### 12. Messages of that chat -> inbound, status "delivered"
+GET {{base_url}}/v1/chats/{{chat_id}}/messages
+Authorization: Bearer {{token}}
+
+
+### 13. Open the chat -> 204; unread 0, inbound "read", blue ticks on the phone
+POST {{base_url}}/v1/chats/{{chat_id}}/read
+Authorization: Bearer {{token}}
+
+
+### 14. Reply (REAL send) -> 201 pending; then ticks via the webhook
+POST {{base_url}}/v1/chats/{{chat_id}}/messages
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"client_msg_id": "{{$guid}}", "type": "text", "body": "Hello from the backend 👋"}
+
+
+### 15. Messages again -> your reply: pending -> sent -> delivered -> read
+GET {{base_url}}/v1/chats/{{chat_id}}/messages
+Authorization: Bearer {{token}}

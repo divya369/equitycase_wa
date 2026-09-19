@@ -193,6 +193,18 @@ The payload inside `data` must match exactly:
   `extract_events`, persist), `processor.py` (`WebhookProcessor`: applies
   events, each in its own session; returns False to leave an event for a
   later retry). Events for another `phone_number_id` are ignored.
+- Inbound messages: `modules/webhook/inbound.py` (`InboundMessageHandler`,
+  lives in the webhook module to avoid a messages <-> webhook import cycle).
+  The chat row is locked (`get_by_contact_for_update`) while a message is
+  applied. `created_at` = Meta's timestamp (drives `last_inbound_at`, so old
+  replays never reopen the 24h window). Message `type` must be one the
+  Flutter client renders (`text|image|video|audio|document|sticker|location`);
+  anything else is stored as text; reactions/system are skipped. A webhook
+  profile name only replaces a placeholder name (the phone / wa_id), never
+  one the operator chose.
+- `POST /v1/chats/{id}/read`: local state commits first; the Meta mark-read
+  (newest inbound wamid, only when something newly became read) is
+  best-effort — logged on failure, never raised.
 - A status whose wamid we don't know yet waits (it may have beaten our own
   send commit; `MessageDelivery` re-runs pending statuses after storing the
   wamid) and is dropped after `UNMATCHED_STATUS_TTL` (1h).

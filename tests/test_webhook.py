@@ -191,13 +191,22 @@ async def test_garbage_body_with_valid_signature_is_200(client, body):
     assert await count("webhook_events") == 0
 
 
-async def test_inbound_message_kept_for_p6(client, business):
+async def test_inbound_message_event_is_processed(client, business):
     payload = envelope(
         business.phone_number_id,
-        messages=[{"from": "91", "id": "wamid.IN1", "type": "text"}],
+        messages=[
+            {
+                "from": "919820011223",
+                "id": "wamid.IN1",
+                "timestamp": "1758067200",
+                "type": "text",
+                "text": {"body": "Hi"},
+            }
+        ],
     )
     await post_signed(client, payload)
-    assert await event_rows() == {"msg:wamid.IN1": False}
+    assert await event_rows() == {"msg:wamid.IN1": True}
+    assert await count("messages") == 1
 
 
 # ---------------------------------------------------------------------------
