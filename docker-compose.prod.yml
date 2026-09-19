@@ -1,0 +1,100 @@
+# Production stack: Postgres + migrations + the app image built by CI/CD.
+#
+# On the server (next to this file): .env (prod values) and the Firebase JSON at
+# FIREBASE_CREDENTIALS_FILE (default ./secrets/fcm-service-account.json, must be
+# readable by uid 10001). DATABASE_URL / FIREBASE_CREDENTIALS / APP_ENV from .env
+# are overridden below.
+#   APP_IMAGE=registry/equitycase-wa-backend:<tag> docker compose -f docker-compose.prod.yml pull
+#   APP_IMAGE=registry/equitycase-wa-backend:<tag> docker compose -f docker-compose.prod.yml up -d
+# (or put APP_IMAGE in .env). Every `up` runs `alembic upgrade head` before the app starts.
+#
+# First deploy only (and whenever the business number / owner changes):
+#   docker compose -f docker-compose.prod.yml --profile seed run --rm seed
+# Not run on every deploy: it resets the operator name to OWNER_NAME.
+#
+# nginx (host) -> 127.0.0.1:8080 -> app. Postgres is not published to the host:
+#   docker compose -f docker-compose.prod.yml exec postgres psql -U <user> -d <db>
+
+name: equitycase-prod
+
+x-app: &app
+  image: ${APP_IMAGE:?set APP_IMAGE to the image CI/CD built}
+  env_file: .env
+  environment: &app-env
+    APP_ENV: production
+    # Postgres by its service name. POSTGRES_PASSWORD must be URL-safe
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    # Never in production (the app refuses to start with it)
+    DEV_STATIC_OTP: ""
+    # Fixed path in the container; the host file is FIREBASE_CREDENTIALS_FILE
+    FIREBASE_CREDENTIALS: /run/secrets/firebase.json
+  volumes:
+    - ${FIREBASE_CREDENTIALS_FILE:-./secrets/fcm-service-account.json}:/run/secrets/firebase.json:ro
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      TZ: UTC
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # One-off, on every `up`: schema to head, then exits
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    <<: *app
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      # Only nginx on this host can reach the port, so trust its X-Forwarded-For
+      FORWARDED_ALLOW_IPS: "*"
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Manual: docker compose -f docker-compose.prod.yml --profile seed run --rm seed
+  seed:
+    <<: *app
+    profiles: ["seed"]
+    command: ["python", "-m", "scripts.seed"]
+    restart: "no"
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
