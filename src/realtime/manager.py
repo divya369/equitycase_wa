@@ -12,6 +12,8 @@ from typing import Any, Protocol
 
 import structlog
 
+from core.security import SEEDED_OPERATOR_ID
+
 logger = structlog.get_logger("ws_manager")
 
 # a socket that can't take a frame this fast is treated as dead
@@ -34,11 +36,13 @@ class WsEvent:
 
 
 class Connection:
-    """One socket. Frames are sent one at a time (broadcasts and pongs come
-    from different tasks)."""
+    """One socket, and the operator it belongs to (push targets the others).
+    Frames are sent one at a time (broadcasts and pongs come from different
+    tasks)."""
 
-    def __init__(self, socket: TextSocket):
+    def __init__(self, socket: TextSocket, operator_id: int):
         self.socket = socket
+        self.operator_id = operator_id
         self._lock = asyncio.Lock()
 
     async def send(self, frame: str) -> None:
@@ -56,10 +60,18 @@ class WsManager:
     def has_clients(self) -> bool:
         return bool(self.connections)
 
-    def add(self, socket: TextSocket) -> Connection:
-        connection = Connection(socket)
+    def connected_operator_ids(self) -> set[int]:
+        """Operators watching live right now — they get no push."""
+        return {c.operator_id for c in self.connections}
+
+    def add(
+        self, socket: TextSocket, operator_id: int = SEEDED_OPERATOR_ID
+    ) -> Connection:
+        connection = Connection(socket, operator_id)
         self.connections.add(connection)
-        logger.info("ws_connected", clients=len(self.connections))
+        logger.info(
+            "ws_connected", clients=len(self.connections), operator_id=operator_id
+        )
         return connection
 
     def remove(self, connection: Connection) -> None:

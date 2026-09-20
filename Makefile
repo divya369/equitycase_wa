@@ -11,12 +11,14 @@ UVICORN := uv run uvicorn main:app --app-dir src --host $(APP_HOST) --port $(APP
 
 .PHONY: help up down down-v logs psql \
 	migration migrate downgrade downgrade-base history current \
-	seed dev start webhook-sample webhook-send lint format check test
+	seed add-operator remove-operator dev start webhook-sample webhook-send \
+	lint format check test
 
 help:
 	@echo "Docker:     up | down | down-v | logs | psql"
 	@echo "Migrations: migration m=\"message\" | migrate | downgrade | downgrade-base | history | current"
-	@echo "App:        seed | dev | start | webhook-sample | webhook-send"
+	@echo "App:        seed | add-operator phone= name= | remove-operator phone= | dev | start"
+	@echo "Webhook:    webhook-sample | webhook-send"
 	@echo "Quality:    lint | format | check | test"
 
 # ---------------------------------------------------------------------------
@@ -67,6 +69,21 @@ current:
 # ---------------------------------------------------------------------------
 seed:
 	uv run python -m scripts.seed
+
+# Extra operators for the shared inbox (the seeded one comes from `make seed`)
+#   make add-operator phone=+919820011223 name="Ananya"
+#   make remove-operator phone=+919820011223
+add-operator:
+ifndef phone
+	$(error Usage: make add-operator phone=+919820011223 name="Ananya")
+endif
+	uv run python -m scripts.add_operator "$(phone)" "$(or $(name),Operator)"
+
+remove-operator:
+ifndef phone
+	$(error Usage: make remove-operator phone=+919820011223)
+endif
+	uv run python -m scripts.remove_operator "$(phone)"
 
 # ws_manager is in-process memory: exactly ONE worker
 dev:

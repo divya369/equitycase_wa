@@ -4,9 +4,9 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     Column,
+    ForeignKey,
     SmallInteger,
     UniqueConstraint,
-    text,
 )
 from sqlmodel import Field, SQLModel
 
@@ -15,23 +15,20 @@ from core.time import utcnow
 
 
 class Operator(SQLModel, table=True):
-    """The ONE person using the Flutter app. Seeded; there is no signup."""
+    """A person using the Flutter app. They share ONE inbox: every operator
+    sees every chat. id = 1 is the seeded one (`make seed`); the others are
+    added with `python -m scripts.add_operator`. There is no signup.
+    """
 
     __tablename__ = "operator"
     __table_args__ = (
-        CheckConstraint("id = 1", name="ck_operator_singleton"),
         UniqueConstraint("phone", name="uq_operator_phone"),
         UniqueConstraint("wa_id", name="uq_operator_wa_id"),
     )
 
-    id: int = Field(
-        default=1,
-        sa_column=Column(
-            SmallInteger,
-            primary_key=True,
-            autoincrement=False,
-            server_default=text("1"),
-        ),
+    id: int | None = Field(
+        default=None,
+        sa_column=Column(SmallInteger, primary_key=True, autoincrement=True),
     )
     # E.164 with +, e.g. +919820011223
     phone: str = Field(sa_column=text_column())
@@ -44,7 +41,8 @@ class Operator(SQLModel, table=True):
 
 
 class FcmToken(SQLModel, table=True):
-    """One row per operator device."""
+    """One row per device. `operator_id` decides who gets a push: a device
+    whose operator is already on a WebSocket is skipped."""
 
     __tablename__ = "fcm_tokens"
     __table_args__ = (
@@ -57,6 +55,16 @@ class FcmToken(SQLModel, table=True):
     id: int | None = Field(
         default=None,
         sa_column=Column(BigInteger, primary_key=True, autoincrement=True),
+    )
+    operator_id: int = Field(
+        sa_column=Column(
+            SmallInteger,
+            ForeignKey(
+                "operator.id", ondelete="CASCADE", name="fk_fcm_tokens_operator"
+            ),
+            nullable=False,
+            index=True,
+        )
     )
     token: str = Field(sa_column=text_column())
     platform: str = Field(sa_column=text_column())

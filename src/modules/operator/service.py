@@ -24,10 +24,14 @@ class OperatorService:
         await self.session.commit()
         return operator
 
-    async def register_fcm_token(self, *, token: str, platform: str) -> None:
-        await self.fcm_tokens.upsert(token=token, platform=platform)
+    async def register_fcm_token(
+        self, *, token: str, platform: str, operator_id: int
+    ) -> None:
+        await self.fcm_tokens.upsert(
+            token=token, platform=platform, operator_id=operator_id
+        )
         await self.session.commit()
-        logger.info("fcm_token_registered", platform=platform)
+        logger.info("fcm_token_registered", platform=platform, operator_id=operator_id)
 
     async def remove_fcm_token(self, token: str) -> None:
         await self.fcm_tokens.delete(token)

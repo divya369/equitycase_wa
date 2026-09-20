@@ -26,8 +26,12 @@ async def update_me(
 
 
 @router.post("/fcm-token", status_code=status.HTTP_204_NO_CONTENT)
-async def register_fcm_token(body: FcmTokenIn, service: OperatorServiceDep) -> Response:
-    await service.register_fcm_token(token=body.token, platform=body.platform)
+async def register_fcm_token(
+    body: FcmTokenIn, operator: CurrentOperator, service: OperatorServiceDep
+) -> Response:
+    await service.register_fcm_token(
+        token=body.token, platform=body.platform, operator_id=operator.id
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

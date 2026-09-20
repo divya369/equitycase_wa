@@ -77,10 +77,6 @@ class PushService:
             logger.exception("push_failed", chat_id=push.chat_id)
 
     async def _notify(self, push: InboundPush) -> None:
-        # the operator is in the app: WS already delivered it
-        if ws_manager.has_clients:
-            logger.info("push_skipped", reason="ws_connected")
-            return
         if push.is_muted:
             logger.info("push_skipped", reason="muted", chat_id=push.chat_id)
             return
@@ -91,10 +87,14 @@ class PushService:
         if client is None:
             return
 
+        # operators watching live already got the message over the WebSocket;
+        # everyone else gets the push
+        watching = ws_manager.connected_operator_ids()
         async with SessionFactory() as session:
-            tokens = await FcmTokenRepository(session).list_tokens()
+            tokens = await FcmTokenRepository(session).list_tokens_except(watching)
         if not tokens:
-            logger.info("push_skipped", reason="no_devices")
+            reason = "all_watching" if watching else "no_devices"
+            logger.info("push_skipped", reason=reason, watching=len(watching))
             return
 
         dead = await client.send_data(tokens, push.data())

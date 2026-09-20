@@ -30,7 +30,7 @@ async def seed(cfg: SeedConfig, database_url: str) -> None:
                 display_phone=cfg.business_display_phone,
                 verified_name=cfg.business_verified_name,
             )
-            await OperatorRepository(session).upsert(
+            await OperatorRepository(session).upsert_seeded(
                 phone=cfg.owner_phone,
                 wa_id=to_wa_id(cfg.owner_phone),
                 name=cfg.owner_name,

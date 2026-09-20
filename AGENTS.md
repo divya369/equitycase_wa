@@ -7,7 +7,8 @@ already has a way here.**
 ## What this is
 
 FastAPI backend for an existing Flutter client: a **single-tenant** WhatsApp
-inbox. One WhatsApp Business number (seeded), one operator (seeded), no signup.
+inbox. One WhatsApp Business number (seeded); one or more operators who all
+share that one inbox (seeded / added by script), no signup.
 "Contacts" are customers who message the business number. There is no
 `owner_id` anywhere.
 
@@ -22,7 +23,9 @@ make up / down / down-v / logs / psql        # Postgres in docker
 make migration m="describe change"           # autogenerate a revision
 make migrate / downgrade / downgrade-base    # upgrade head / -1 / base
 make history / current
-make seed                                    # idempotent singleton rows
+make seed                                    # idempotent business + operator 1
+make add-operator phone= name=               # another operator (shared inbox)
+make remove-operator phone=                  # revoke one (not the seeded one)
 make dev                                     # reload, ONE worker
 make start                                   # ONE worker
 make webhook-sample [kind= status= wamid=]   # signed body for api.rest
@@ -168,8 +171,11 @@ The payload inside `data` must match exactly:
   unique violation and return the existing row.
 - Inbound messages are stored as `delivered` (2); set `read` (3) + Meta
   mark-read only when the operator opens the chat.
-- `business_number` and `operator` are singleton rows (`id = 1`), created only
-  by `make seed`. The app refuses to start without them.
+- `business_number` is a singleton row (`id = 1`), created only by
+  `make seed`; so is `operator` **id 1**. The app refuses to start without
+  them. More operators may exist (`scripts/add_operator.py`) — they all share
+  the one inbox, so no table ever gets an `operator_id` except `otp_codes`
+  and `fcm_tokens`.
 
 ## Meta WhatsApp Cloud API
 
@@ -225,10 +231,18 @@ The payload inside `data` must match exactly:
   so httpx request logging stays at WARNING.
 - argon2 hash at rest, 5-minute expiry, max 5 attempts, newest unconsumed code
   wins, rate-limited by IP (slowapi) on request AND verify.
+- Codes are **per operator** (`otp_codes.operator_id`): two operators can have
+  a pending login at the same time, and one request never invalidates the
+  other's code. Any registered `operator.wa_id` may log in
+  (`OperatorRepository.get_by_wa_id`).
 - Unknown phone on `otp/request` -> still 204, send nothing.
 - `DEV_STATIC_OTP` is dev-only; the app refuses to start with it when
   `APP_ENV=production`.
-- JWT `sub="operator"`, signed with `JWT_SECRET`, TTL `JWT_TTL_HOURS`.
+- JWT `sub="operator:<id>"`, signed with `JWT_SECRET`, TTL `JWT_TTL_HOURS`.
+  `decode_access_token` adds `operator_id` to the payload; the pre-P12
+  `sub="operator"` still resolves to the seeded operator, so tokens issued
+  before the change keep working. `get_current_operator` loads THAT operator,
+  so a removed one's token is 401.
 
 ## Realtime & push
 
@@ -236,6 +250,9 @@ The payload inside `data` must match exactly:
   (over the wire that is a rejected handshake, HTTP 403). Keep a set of
   sockets; drop any socket that errors during broadcast. Client `ping` ->
   `pong`; 60s without any frame -> close 1000.
+- Every `Connection` carries its `operator_id` (from the token). Events go to
+  **every** socket — the inbox is shared — but
+  `ws_manager.connected_operator_ids()` decides who is skipped for push.
 - Code: `realtime/manager.py` (`ws_manager`, `WsEvent`), `realtime/events.py`
   (builders — payloads come from `MessageOut`/`ChatOut`, never hand-built),
   `realtime/router.py`.
@@ -249,11 +266,18 @@ The payload inside `data` must match exactly:
   plus `chat_id`, `error`); send / read / clear -> `chat.updated`; message
   delete -> `message.deleted` (+ `chat.updated` if it was the last);
   chat or contact delete -> `chat.deleted`.
-- Tests: the `ws` fixture registers a recording socket (`ws.types`,
-  `ws.of_type(...)`); the handshake is tested with Starlette's `TestClient`.
+- Tests: the `ws` fixture registers a recording socket for the seeded
+  operator (`ws.types`, `ws.of_type(...)`); a second one is
+  `ws_manager.add(RecordingSocket(), other_id)`. The handshake is tested with
+  Starlette's `TestClient`. Multi-operator fixtures: `second_operator`,
+  `headers_for(operator_id)`.
 - **Exactly one uvicorn worker** — the socket set is in-process memory.
-- FCM: data-only messages, all values strings; skip when any WS client is
-  connected or the chat is muted; delete UNREGISTERED tokens.
+- FCM: data-only messages, all values strings; delete UNREGISTERED tokens.
+  Skip the chat when it is muted or the message is stale; otherwise push to
+  the devices of the operators who are **not** on a WebSocket
+  (`FcmTokenRepository.list_tokens_except(watching)`). Everyone watching ->
+  `push_skipped reason=all_watching`. A device belongs to whoever last
+  registered it (`fcm_tokens.operator_id`, moved on re-register).
 - FCM code: `integrations/fcm/client.py` (`FcmClient`, built once by
   `init_fcm()` in lifespan from `FIREBASE_CREDENTIALS`; unset = push off, a
   bad file fails startup; reached via `get_fcm_client()`), and

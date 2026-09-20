@@ -40,10 +40,8 @@ class AuthService:
         self.sender = sender
 
     async def _operator_for_phone(self, phone: str) -> Operator | None:
-        operator = await self.operators.get()
-        if operator is None or to_wa_id(phone) != operator.wa_id:
-            return None
-        return operator
+        """Any registered operator may log in — the inbox is shared."""
+        return await self.operators.get_by_wa_id(to_wa_id(phone))
 
     async def request_otp(self, phone: str) -> None:
         """Always succeeds for the caller — never reveals which phone is valid."""
@@ -57,9 +55,11 @@ class AuthService:
             return
 
         code = generate_otp()
-        await self.otps.invalidate_active()
+        await self.otps.invalidate_active(operator.id)
         await self.otps.create(
-            code_hash=await hash_otp(code), expires_at=utcnow() + OTP_TTL
+            operator_id=operator.id,
+            code_hash=await hash_otp(code),
+            expires_at=utcnow() + OTP_TTL,
         )
         await self.session.commit()
 
@@ -82,9 +82,9 @@ class AuthService:
             ):
                 raise InvalidOtpError()
             logger.warning("otp_verified_with_dev_static_otp")
-            return create_access_token(), operator
+            return create_access_token(operator.id), operator
 
-        otp = await self.otps.get_newest_active_for_update()
+        otp = await self.otps.get_newest_active_for_update(operator.id)
         if otp is None or otp.attempts >= OTP_MAX_ATTEMPTS:
             await self.session.rollback()
             raise InvalidOtpError()
@@ -101,5 +101,5 @@ class AuthService:
             logger.info("otp_verify_failed", attempts=otp.attempts)
             raise InvalidOtpError()
 
-        logger.info("otp_verified")
-        return create_access_token(), operator
+        logger.info("otp_verified", operator_id=operator.id)
+        return create_access_token(operator.id), operator

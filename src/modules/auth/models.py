@@ -1,6 +1,14 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Column, Index, Integer, text
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    ForeignKey,
+    Index,
+    Integer,
+    SmallInteger,
+    text,
+)
 from sqlmodel import Field, SQLModel
 
 from core.columns import text_column, timestamp_column
@@ -8,13 +16,24 @@ from core.time import utcnow
 
 
 class OtpCode(SQLModel, table=True):
+    """One login code, for ONE operator: two operators can log in at once."""
+
     __tablename__ = "otp_codes"
     # Postgres scans a btree backwards, so a plain index serves ORDER BY ... DESC
-    __table_args__ = (Index("ix_otp_codes_created_at", "created_at"),)
+    __table_args__ = (
+        Index("ix_otp_codes_operator_created", "operator_id", "created_at"),
+    )
 
     id: int | None = Field(
         default=None,
         sa_column=Column(BigInteger, primary_key=True, autoincrement=True),
+    )
+    operator_id: int = Field(
+        sa_column=Column(
+            SmallInteger,
+            ForeignKey("operator.id", ondelete="CASCADE", name="fk_otp_codes_operator"),
+            nullable=False,
+        )
     )
     # argon2 hash — NEVER the plaintext code
     code_hash: str = Field(sa_column=text_column())

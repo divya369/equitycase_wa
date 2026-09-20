@@ -92,7 +92,8 @@ async def test_verify_success_returns_token_and_user(client, operator, sent_code
         app_config.jwt_secret.get_secret_value(),
         algorithms=["HS256"],
     )
-    assert claims["sub"] == "operator"
+    # the subject names the operator (P12)
+    assert claims["sub"] == f"operator:{operator.id}"
 
     rows = await _otp_rows()
     assert rows[0]["attempts"] == 1

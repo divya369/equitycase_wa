@@ -95,6 +95,9 @@ async def _clean_state():
         await session.exec(
             text(f"TRUNCATE {', '.join(_MUTABLE_TABLES)} RESTART IDENTITY")
         )
+        # operators a test added; the seeded one (id = 1) stays
+        await session.exec(text("DELETE FROM operator WHERE id <> 1"))
+        await session.exec(text("SELECT setval('operator_id_seq', 1)"))
         await session.commit()
     ws_manager.connections.clear()
     yield
@@ -136,6 +139,18 @@ async def client():
 async def operator():
     async with SessionFactory() as session:
         return await OperatorRepository(session).get()
+
+
+@pytest.fixture
+async def second_operator():
+    """A second operator sharing the same inbox (P12)."""
+    async with SessionFactory() as session:
+        operator = await OperatorRepository(session).create(
+            phone="+919000000002", wa_id="919000000002", name="Second Operator"
+        )
+        await session.commit()
+        await session.refresh(operator)
+        return operator
 
 
 @pytest.fixture
@@ -210,6 +225,16 @@ def fcm():
 @pytest.fixture
 def auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {create_access_token()}"}
+
+
+@pytest.fixture
+def headers_for():
+    """Bearer headers for any operator: headers_for(second_operator.id)."""
+
+    def build(operator_id: int) -> dict[str, str]:
+        return {"Authorization": f"Bearer {create_access_token(operator_id)}"}
+
+    return build
 
 
 @pytest.fixture

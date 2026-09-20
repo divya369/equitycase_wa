@@ -34,14 +34,15 @@ def _is_ping(text: str | None) -> bool:
 async def websocket_endpoint(websocket: WebSocket, token: str | None = None) -> None:
     # validate BEFORE accept(): a bad token never gets a connection
     try:
-        decode_access_token(token or "")
+        payload = decode_access_token(token or "")
     except InvalidTokenError:
         logger.info("ws_rejected_invalid_token")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
     await websocket.accept()
-    connection = ws_manager.add(websocket)
+    # who is watching: their devices get no push while this socket lives
+    connection = ws_manager.add(websocket, payload["operator_id"])
     try:
         while True:
             try:

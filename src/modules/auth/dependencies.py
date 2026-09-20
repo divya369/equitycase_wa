@@ -32,11 +32,12 @@ async def get_current_operator(
         raise UnauthorizedError("Missing bearer token")
 
     try:
-        decode_access_token(credentials.credentials)
+        payload = decode_access_token(credentials.credentials)
     except InvalidTokenError as e:
         raise UnauthorizedError("Invalid or expired token") from e
 
-    operator = await OperatorRepository(session).get()
+    # the token says WHICH operator; a removed one no longer has a row
+    operator = await OperatorRepository(session).get(payload["operator_id"])
     if operator is None:
         raise UnauthorizedError()
     return operator

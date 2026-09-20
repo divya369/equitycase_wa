@@ -12,7 +12,10 @@ from config.app_config import app_config
 from core.time import utcnow
 
 JWT_ALGORITHM = "HS256"
+# sub = "operator:<id>". Tokens issued before P12 carry the bare subject and
+# mean the seeded operator, so phones already logged in keep working.
 OPERATOR_SUBJECT = "operator"
+SEEDED_OPERATOR_ID = 1
 
 _hasher = PasswordHasher()
 
@@ -24,10 +27,10 @@ class InvalidTokenError(Exception):
 # ---------------------------------------------------------------------------
 # JWT
 # ---------------------------------------------------------------------------
-def create_access_token() -> str:
+def create_access_token(operator_id: int = SEEDED_OPERATOR_ID) -> str:
     now = utcnow()
     payload = {
-        "sub": OPERATOR_SUBJECT,
+        "sub": f"{OPERATOR_SUBJECT}:{operator_id}",
         "iat": now,
         "exp": now + timedelta(hours=app_config.jwt_ttl_hours),
         "jti": uuid.uuid4().hex,
@@ -50,10 +53,20 @@ def decode_access_token(token: str) -> dict:
     except jwt.PyJWTError as e:
         raise InvalidTokenError(type(e).__name__) from e
 
-    if payload.get("sub") != OPERATOR_SUBJECT:
-        raise InvalidTokenError("wrong subject")
-
+    payload["operator_id"] = _operator_id_from_subject(payload.get("sub"))
     return payload
+
+
+def _operator_id_from_subject(subject: object) -> int:
+    """ "operator:<id>", or the pre-P12 "operator" (= the seeded operator)."""
+    if subject == OPERATOR_SUBJECT:
+        return SEEDED_OPERATOR_ID
+    if not isinstance(subject, str) or not subject.startswith(f"{OPERATOR_SUBJECT}:"):
+        raise InvalidTokenError("wrong subject")
+    try:
+        return int(subject.split(":", 1)[1])
+    except ValueError as e:
+        raise InvalidTokenError("wrong subject") from e
 
 
 # ---------------------------------------------------------------------------
