@@ -97,6 +97,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: docker-compose.prod.yml
           target: ${{ env.DEPLOY_DIR }}
+          # replace the copy already on the server
+          overwrite: true
 
       - name: Pull + up
         uses: appleboy/ssh-action@v1
