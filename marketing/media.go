@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +60,13 @@ func (c *Client) UploadMedia(ctx context.Context, path string) (*MediaUpload, er
 	if err := form.WriteField("type", mimeType); err != nil {
 		return nil, err
 	}
-	part, err := form.CreateFormFile("file", filepath.Base(path))
+	// CreateFormFile would label the part application/octet-stream, which
+	// Meta rejects — set the real type on the part itself.
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", fmt.Sprintf(
+		`form-data; name="file"; filename=%q`, filepath.Base(path)))
+	header.Set("Content-Type", mimeType)
+	part, err := form.CreatePart(header)
 	if err != nil {
 		return nil, err
 	}
@@ -116,8 +123,10 @@ func mimeFor(path string) (string, error) {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".mp4":
 		return "video/mp4", nil
-	case ".3gp":
-		return "video/3gp", nil
+	case ".3gp", ".3gpp":
+		return "video/3gpp", nil
+	case ".webp":
+		return "image/webp", nil
 	case ".jpg", ".jpeg":
 		return "image/jpeg", nil
 	case ".png":
