@@ -50,6 +50,7 @@ func run() int {
 		timeout = flag.Duration("timeout", 15*time.Second, "per-request timeout")
 		outPath = flag.String("out", "", "write a per-recipient result CSV here")
 		dryRun  = flag.Bool("dry-run", false, "resolve recipients, send nothing")
+		upload  = flag.String("upload", "", "upload this file to Meta, print its media id, exit")
 	)
 	flag.Usage = usage
 	flag.Parse()
@@ -65,6 +66,10 @@ func run() int {
 	if err != nil {
 		log.Printf("config: %v", err)
 		return 2
+	}
+
+	if *upload != "" {
+		return uploadMedia(cfg, *upload, *timeout)
 	}
 
 	recipients, err := collectRecipients(flag.Args(), *csvPath, cfg.DefaultCountryCode)
@@ -138,6 +143,30 @@ func usage() {
 Flags:
 `)
 	flag.PrintDefaults()
+}
+
+// uploadMedia puts a local video (or image/pdf) in Meta's media store and
+// prints the id for MARKETING_HEADER_VIDEO_ID. Media ids expire in ~30 days.
+func uploadMedia(cfg *Config, path string, timeout time.Duration) int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// a video upload needs longer than a message send
+	client := NewClient(cfg, max(timeout, 5*time.Minute))
+
+	log.Printf("uploading %s ...", path)
+	media, err := client.UploadMedia(ctx, path)
+	if err != nil {
+		log.Printf("upload failed: %v", err)
+		return 1
+	}
+
+	fmt.Printf("\nendpoint : %s\n", media.URL)
+	fmt.Printf("type     : %s (%.1f MB)\n", media.MimeType, float64(media.Bytes)/(1<<20))
+	fmt.Printf("media id : %s\n\n", media.ID)
+	fmt.Printf("Put this in your .env (ids expire in about 30 days):\n")
+	fmt.Printf("MARKETING_HEADER_VIDEO_ID=%s\n", media.ID)
+	return 0
 }
 
 func collectRecipients(args []string, csvPath, defaultCC string) ([]Recipient, error) {
