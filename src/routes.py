@@ -5,6 +5,7 @@ from modules.auth.router import router as auth_router
 from modules.chats.router import router as chats_router
 from modules.contacts.router import router as contacts_router
 from modules.health.router import router as health_router
+from modules.marketing.router import router as marketing_router
 from modules.messages.router import router as messages_router
 from modules.operator.router import router as me_router
 from modules.webhook.router import router as webhook_router
@@ -13,6 +14,8 @@ from realtime.router import router as ws_router
 # /v1/auth/* — public (OTP login)
 v1_router = APIRouter(prefix="/v1")
 v1_router.include_router(auth_router)
+# /v1/marketing/* — the blast CLI, guarded by X-API-Key (no operator JWT)
+v1_router.include_router(marketing_router)
 
 # Every other /v1 router goes here: the operator JWT is enforced ONCE, for all.
 protected_router = APIRouter(dependencies=[Depends(get_current_operator)])

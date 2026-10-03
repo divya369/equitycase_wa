@@ -45,6 +45,10 @@ class AppConfig(BaseSettings):
     # FCM
     firebase_credentials: str | None = None
 
+    # Shared key for the marketing blast CLI (/v1/marketing/*). Unset = the
+    # routes stay closed.
+    marketing_api_key: SecretStr | None = None
+
     # S3 / R2 media storage
     s3_bucket: str | None = None
     s3_endpoint_url: str | None = None

@@ -17,6 +17,8 @@ from modules.chats.models import Chat
 from modules.chats.repository import ChatRepository
 from modules.contacts.models import Contact
 from modules.contacts.repository import ContactRepository
+from modules.marketing.repository import MarketingOptOutRepository
+from modules.marketing.service import SOURCE_BUTTON, SOURCE_TEXT, is_stop_request
 from modules.messages.models import Message, MessageDirection, MessageStatus
 from modules.messages.repository import MessageRepository
 from modules.notifications.service import InboundPush
@@ -38,6 +40,9 @@ class ParsedMessage:
     body: str
     media_id: str | None = None
     media_mime: str | None = None
+    # came from a template/interactive button, not typed — used to label an
+    # opt-out as "stop_button"
+    from_button: bool = False
 
 
 def parse_message(message: dict[str, Any]) -> ParsedMessage | None:
@@ -68,12 +73,17 @@ def parse_message(message: dict[str, Any]) -> ParsedMessage | None:
         return ParsedMessage("location", label or "📍 Location")
 
     if kind == "button":
-        return ParsedMessage("text", (message.get("button") or {}).get("text") or "")
+        # quick-reply under a template, e.g. the marketing STOP button
+        button = message.get("button") or {}
+        text = button.get("text") or button.get("payload") or ""
+        return ParsedMessage("text", text, from_button=True)
 
     if kind == "interactive":
         interactive = message.get("interactive") or {}
         reply = interactive.get("button_reply") or interactive.get("list_reply") or {}
-        return ParsedMessage("text", reply.get("title") or UNSUPPORTED_BODY)
+        return ParsedMessage(
+            "text", reply.get("title") or UNSUPPORTED_BODY, from_button=True
+        )
 
     return ParsedMessage("text", UNSUPPORTED_BODY)
 
@@ -101,6 +111,7 @@ class InboundMessageHandler:
         self.contacts = ContactRepository(session)
         self.chats = ChatRepository(session)
         self.messages = MessageRepository(session)
+        self.opt_outs = MarketingOptOutRepository(session)
         # WS events + FCM pushes for the caller to send after its commit
         self.events: list[WsEvent] = []
         self.pushes: list[InboundPush] = []
@@ -143,6 +154,7 @@ class InboundMessageHandler:
             )
         )
         await self._record_on_chat(chat, stored)
+        await self._record_stop_request(wa_id, parsed)
 
         logger.info(
             "inbound_message_stored",
@@ -154,6 +166,15 @@ class InboundMessageHandler:
         self.events.append(ws_events.chat_updated(await self.chats.get_row(chat.id)))
         self.pushes.append(InboundPush.build(chat, contact, stored))
         return stored
+
+    async def _record_stop_request(self, wa_id: str, parsed: ParsedMessage) -> None:
+        """STOP under a marketing template (or typed): never send marketing to
+        this number again. Committed with the message itself."""
+        if parsed.type != "text" or not is_stop_request(parsed.body):
+            return
+        source = SOURCE_BUTTON if parsed.from_button else SOURCE_TEXT
+        await self.opt_outs.add(wa_id=wa_id, source=source)
+        logger.info("marketing_opt_out_recorded", source=source)
 
     async def _upsert_contact(self, wa_id: str, name: str | None) -> Contact:
         phone = to_display_phone(wa_id)

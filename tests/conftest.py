@@ -85,6 +85,7 @@ _MUTABLE_TABLES = (
     "chats",
     "messages",
     "webhook_events",
+    "marketing_opt_outs",
 )
 
 
